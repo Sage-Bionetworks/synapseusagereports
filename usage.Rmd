@@ -9,7 +9,7 @@ library(ggplot2)
 library(scales)
 library(stringr)
 library(synapseClient)
-library(redshift)
+library(RMySQL)
 library(yaml)
 
 synapseLogin()
@@ -38,71 +38,29 @@ header <- c("returnobjectid", "elapsems", "timestamp", "via", "host", "threadid"
 keepcols <- c(1, 3, 7, 11, 12, 14, 18, 19)
 
 ```
-
-```{r getwholeproject}
-qr <- synQuery('select name,id from file where projectId=="syn1773109"', blockSize = 250)
-recs <- qr$collectAll()
-colnames(recs) <- gsub(".*\\.", "", colnames(recs))
-```
-
-```{r updates3, eval=FALSE, include=FALSE}
-# Connect to redshift and unload all data for a particular table
+```{r mysql}
 # The tables are set up by month
 
-config <- yaml.load_file("redshift_config.yml")
-aws_config <- yaml.load_file("~/.aws/credentials.yml")
+config <- yaml.load_file("mysql_config.yml")
 
-conn <- redshift.connect(sprintf("jdbc:postgresql://%s:%s/%s", config$host, config$port, config$db),
-                         config$username, config$password)
+con <- dbConnect(MySQL(),
+                 user = config$username,
+                 password = config$password,
+                 host = config$host,
+                 dbname='warehouse')
 
-table_name <- "get_repoentity_201510"
-s3url <- sprintf("s3://dw.prod.output.sagebase.org/kdaily/%s-", table_name)
+beginTimestamp <- 1446336000000
+beginDate <- as.POSIXct(beginTimestamp / 1000, origin="1970-01-01")
 
-q <- sprintf(paste("unload ('select * from %s') to '%s'",
-                   "credentials 'aws_access_key_id=%s;aws_secret_access_key=%s' delimiter ',';"), 
-             table_name, s3url, aws_config$datawarehouse$aws_access_key_id, 
-             aws_config$datawarehouse$aws_secret_access_key)
+endTimestamp <- 1450137600000
+endDate <- as.POSIXct(endTimestamp / 1000, origin="1970-01-01")
 
-res <- dbGetQuery(conn, q)
+q <- sprintf('select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,N.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "1773109") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");', beginTimestamp, endTimestamp)
 
-system("aws --profile datawarehouse s3 sync s3://dw.prod.output.sagebase.org/kdaily/ ./s3")
-
+data.downloads <- dbGetQuery(conn = con, statement=q) %>% 
+  dplyr::rename(userid=USER_ID, id=ENTITY_ID)
 ```
-
-```{r read}
-dataDir <- './s3/'
-
-readFxn <- function(x, keepids) {
-  tmp <- fread(x, data.table=FALSE, header = FALSE, select=keepcols)
-  colnames(tmp) <- header[keepcols]
-  
-  # data$timestamp <- as.character(data$timestamp)
-  
-  tmp %>% 
-    mutate(timestamp=as.character(timestamp), id=str_extract(requesturl, "syn[0-9]+")) %>%
-    filter(id %in% keepids)
-  
-}
-
-data <- ldply(dir(dataDir, pattern="get_repoentity_2015[01][890].*", full.names=TRUE), 
-              fread, data.table=FALSE, header=FALSE, select=keepcols, .progress='text')
-colnames(data) <- header[keepcols]
-```
-
-```{r filter}
-data <- data %>% 
-  mutate(id=str_extract(requesturl, "syn[0-9]+")) %>% 
-  filter(id %in% recs$id)
-```
-
-```{r subset}
-data.downloads <- data %>% 
-  filter(str_detect(requesturl, "/repo/v1/entity/syn.*/file$"))
-
-data.browse <- data %>% 
-  filter(str_detect(requesturl, "/repo/v1/entity/syn[0-9]+$") | str_detect(requesturl, "/repo/v1/entity/syn[0-9]+/version/[0-9]+$") | str_detect(requesturl, "/repo/v1/entity/syn[0-9]+/bundle$"))
-```
-
+Usage statistics from `r as.Date(beginDate)` to `r as.Date(endDate)`.
 ```{r pcbcusers}
 # Get users at project level
 acl <- synGetEntityACL("syn1773109")
@@ -144,12 +102,12 @@ sageUserList <- sageUserList %>%
 
 allKnownUsers <- rbind(aclUserList, coreUserList, pcbcUserList, sageUserList)
 ```
-
 ```{r summaryuseraccess}
 # Get user profile info
-allUsersList <- ldply(unique(data$userid), function(x) {foo <- synGetUserProfile(x); 
-                                                         data.frame(userid=x,
-                                                                    username=foo@userName)})
+allUsersList <- ldply(unique(data.downloads$userid),
+                      function(x) {foo <- synGetUserProfile(x); 
+                      data.frame(userid=as.character(x),
+                                 username=foo@userName)})
 
 allUsers <- left_join(allUsersList, allKnownUsers)
 
@@ -157,37 +115,32 @@ allUsers$group <- "Other"
 allUsers$group[allUsers$teamid %in% c("syn1773109", "3319054", "2224090")] <- "PCBC"
 allUsers$group[allUsers$teamid %in% c("273957")] <- "Sage"
 allUsers$group <- factor(allUsers$group, levels=c("PCBC", "Sage", "Other"), ordered=TRUE)
-
 ```
-
 ## Downloads
 
 Statistics specifically for file downloads.
-
 ```{r loadperday}
 perday <- data.downloads %>%
-  mutate(date=as.Date(as.character(date)),
+  mutate(date=as.Date(as.character(DATE)),
          userid=as.character(userid))
 
 perdayCount <- perday %>%
   count(date)
 ```
-
 ```{r plotperday, fig.width=16, fig.height=8}
 plotdata <- perdayCount
 
 p <- ggplot(plotdata, aes(x=date, y=n)) + geom_line(size=1)
 p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
                       #labels = date_format("%b %Y"),
-                      limits = c(as.Date("2015-7-31"), as.Date("2015-11-1")))
+                      limits = c(as.Date(beginDate), as.Date(endDate)))
 
 p  <- p + labs(y="total accesses", x="Day")
 
 p  <- p + mytheme + theme(axis.title.x=element_blank(),
-                          axis.text.x=element_text(size=16, angle=270))
+                          axis.text.x=element_text(size=16, angle=270, vjust=0.5))
 p
 ```
-
 ### Users
 
 ```{r}
@@ -204,7 +157,6 @@ useraccessCount <- useraccess %>%
 ```
 
 ### Number of accesses per group of users
-
 ```{r plotperdayperuser, fig.width=20, fig.height=6}
 plotdata <- useraccess %>%
   count(date, username, userid) %>%
@@ -213,20 +165,19 @@ plotdata <- useraccess %>%
 p <- ggplot(plotdata, aes(x=date, y=n, color=group)) + geom_point(size=4)
 p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
                       # labels = date_format("%b %Y"),
-                      limits = c(as.Date("2015-7-31"), as.Date("2015-11-1")))
+                      limits = c(as.Date(beginDate), as.Date(endDate)))
 
 p <- p + scale_y_log10()
 # p  <- p + labs(y=expression(log[10]("access per user")), x="Day")
 p  <- p + labs(y="access per user", x="Day")
 # p <- p + facet_grid(group ~ .)
 p  <- p + mytheme + theme(axis.title.x=element_text(size=16),
-                          axis.text.x=element_text(size=16, angle=270),
+                          axis.text.x=element_text(size=16, angle=270, vjust=0.5),
                           strip.text.y=element_text(size=20, angle=270),
                           legend.position="top")
 p
 
 ```
-
 ```{r fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 ## Requests per user
 
@@ -234,10 +185,9 @@ pUser <- ggplot(useraccessCount, aes(x=username, y=n))
 pUser <- pUser + geom_bar(stat="identity", aes(fill=group))
 pUser <- pUser + scale_y_log10()
 # pUser <- pUser + facet_wrap( ~ group, scale="free_x")
-pUser <- pUser + mytheme + theme(axis.text.x=element_text(angle=270))
+pUser <- pUser + mytheme + theme(axis.text.x=element_text(angle=270, vjust=0.5))
 pUser
 ```
-
 ```{r}
 useraccessCount %>% mutate(badge=paste0("${badge?isUser=true&id=", userid, "&inlineWidget=true}")) %>%
   select(badge, group, n) %>% 
@@ -245,42 +195,32 @@ useraccessCount %>% mutate(badge=paste0("${badge?isUser=true&id=", userid, "&inl
   arrange(-n) %>% 
   kable
 ```
-
 ### Data
-
 ```{r loadtop100}
-dataaccessCount <- perday %>% 
-  count(id) %>% 
-  filter(n > 1, !str_detect(id, "acl")) %>%
-  arrange(desc(n))
-
-top100 <- dataaccessCount %>% left_join(recs)
-
+topfiles <- perday %>% 
+  count(id, NAME) %>% 
+  ungroup %>% 
+  arrange(desc(n)) %>%
+  filter(n > 3)
 ```
-
 ### Most popular files
-
 ```{r plot100files, fig.width=20, fig.height=6}
-plotdata <- top100 %>% mutate(plotname=paste(id, name)) %>%head(100)
+plotdata <- topfiles %>% mutate(plotname=paste(id, NAME)) %>%head(100)
 plotdata$name <- factor(plotdata$id, levels=plotdata$id, order=TRUE)
 p <- ggplot(plotdata, aes(x=name, y=n))
 p <- p + geom_bar(stat="identity")
-p  <- p + mytheme + theme(axis.text.x=element_text(size=16, angle=270),
+p  <- p + mytheme + theme(axis.text.x=element_text(size=16, angle=270, vjust=0.5),
                           axis.title.x=element_blank())
 p
 ```
-
-
 ```{r}
-top100 %>% select(id, name, n) %>% kable
+topfiles %>% select(id, NAME, n) %>% kable
 
 ```
-
+```{r loadperdaybrowse, include=FALSE, eval=FALSE}
 ## Website access
 
 ### Daily usage
-
-```{r loadperdaybrowse}
 perday <- data.browse %>%
   mutate(date=as.Date(as.character(date)),
          userid=as.character(userid))
@@ -288,25 +228,22 @@ perday <- data.browse %>%
 perdayCount <- perday %>%
   count(date)
 ```
-
+```{r plotperdaybrowse, fig.width=20, fig.height=6, include=FALSE, eval=FALSE}
 ### Per day usage, total
 
-```{r plotperdaybrowse, fig.width=20, fig.height=6}
 plotdata <- perdayCount
 
 p <- ggplot(plotdata, aes(x=date, y=n)) + geom_line(size=1)
 p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
                       #labels = date_format("%b %Y"),
-                      limits = c(as.Date("2015-7-31"), as.Date("2015-11-1")))
+                      limits = c(as.Date(beginDate), as.Date(endDate)))
 
 p  <- p + mytheme + theme(axis.title.x=element_blank(),
                           axis.text.x=element_text(size=16, angle=270))
 p
 ```
-
+```{r include=FALSE, eval=FALSE}
 ### Users
-
-```{r}
 useraccess <- perday %>% 
   left_join(., allUsers) %>%
   filter(!is.na(group))
@@ -318,10 +255,8 @@ useraccessCount <- useraccess %>%
   mutate(username=reorder(username, n, order=TRUE),
          userid=reorder(userid, n, order=TRUE))
 ```
-
+```{r plotperdayperuserbrowse, fig.width=20, fig.height=6, include=FALSE, eval=FALSE}
 ### Number of accesses per group of users
-
-```{r plotperdayperuserbrowse, fig.width=20, fig.height=6}
 plotdata <- useraccess %>%
   count(date, username, userid) %>%
   left_join(allUsers)
@@ -329,7 +264,7 @@ plotdata <- useraccess %>%
 p <- ggplot(plotdata, aes(x=date, y=n, color=group)) + geom_point(size=4)
 p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
                       # labels = date_format("%b %Y"),
-                      limits = c(as.Date("2015-07-31"), as.Date("2015-11-1")))
+                      limits = c(as.Date(beginDate), as.Date(endDate)))
 
 p <- p + scale_y_log10()
 p  <- p + labs(y=expression(log[10]("access per user")), x="Day")
@@ -341,8 +276,7 @@ p  <- p + mytheme + theme(axis.title.x=element_text(size=16),
 p
 
 ```
-
-```{r fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
+```{r fig.width=20, fig.height=6, include=FALSE, eval=FALSE}
 ## Requests per user
 
 pUser <- ggplot(useraccessCount, aes(x=username, y=n)) 
@@ -352,18 +286,15 @@ pUser <- pUser + scale_y_log10()
 pUser <- pUser + mytheme + theme(axis.text.x=element_text(angle=270))
 pUser
 ```
-
-```{r}
+```{r include=FALSE, eval=FALSE}
 useraccessCount %>% mutate(badge=paste0("${badge?isUser=true&id=", userid, "&inlineWidget=true}")) %>%
   select(badge, group, n) %>% 
   dplyr::rename(user=badge) %>% 
   arrange(-n) %>% 
   kable
 ```
-
+```{r loadtop100browse, include=FALSE, eval=FALSE}
 ### Data
-
-```{r loadtop100browse}
 dataaccessCount <- perday %>% 
   count(id) %>% 
   filter(n > 1, !str_detect(id, "acl")) %>%
@@ -372,10 +303,8 @@ dataaccessCount <- perday %>%
 top100 <- dataaccessCount %>% left_join(recs)
 
 ```
-
+```{r plot100filesbrowse, fig.width=20, fig.height=6, include=FALSE, eval=FALSE}
 ### Most popular files
-
-```{r plot100filesbrowse, fig.width=20, fig.height=6}
 plotdata <- top100 %>% mutate(plotname=paste(id, name)) %>%head(100)
 plotdata$name <- factor(plotdata$id, levels=plotdata$id, order=TRUE)
 p <- ggplot(plotdata, aes(x=name, y=n))
@@ -384,9 +313,6 @@ p  <- p + mytheme + theme(axis.text.x=element_text(size=16, angle=270),
                           axis.title.x=element_blank())
 p
 ```
-
-
-```{r}
+```{r include=FALSE, eval=FALSE}
 top100 %>% select(id, name, n) %>% kable
-
 ```
