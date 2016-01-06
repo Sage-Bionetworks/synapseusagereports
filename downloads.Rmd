@@ -11,6 +11,7 @@ library(stringr)
 library(synapseClient)
 library(RMySQL)
 library(yaml)
+library(lubridate)
 
 synapseLogin()
 
@@ -51,11 +52,17 @@ con <- dbConnect(MySQL(),
                  host = config$host,
                  dbname='warehouse')
 
-beginTimestamp <- 1446336000000
-beginDate <- as.POSIXct(beginTimestamp / 1000, origin="1970-01-01")
+endDate <- as.POSIXct(Sys.Date(), origin="1970-01-01", tz="PST")
+endTimestamp <- as.numeric(endDate) * 1000
 
-endTimestamp <- 1450137600000
-endDate <- as.POSIXct(endTimestamp / 1000, origin="1970-01-01")
+beginDate <- endDate - months(1)
+beginTimestamp <- as.numeric(beginDate) * 1000
+
+# beginTimestamp <- 1446336000000
+# beginDate <- as.POSIXct(beginTimestamp / 1000, origin="1970-01-01")
+
+# endTimestamp <- 1450137600000
+# endDate <- as.POSIXct(endTimestamp / 1000, origin="1970-01-01")
 
 q.downloads <- sprintf('select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,N.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");', projectId, beginTimestamp, endTimestamp)
 
@@ -66,7 +73,7 @@ data.downloads <- dbGetQuery(conn = con, statement=q.downloads) %>%
 
 ### Download usage statistics from `r as.Date(beginDate)` to `r as.Date(endDate)`.
 
-```{r pcbcusers}
+```{r users}
 # Get users at project level
 acl <- synGetEntityACL("syn1773109")
 
@@ -134,6 +141,9 @@ perdayCount <- data.downloads %>%
   count(group, date) %>% 
   arrange(n)
 ```
+
+#### Downloads per day
+
 ```{r plotperday, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 ### Per day usage, total
 plotdata <- perdayCount %>% 
@@ -158,6 +168,9 @@ useraccessCount <- data.downloads %>%
   mutate(username=reorder(username, n, order=TRUE),
          userid=reorder(userid, n, order=TRUE))
 ```
+
+#### Downloads per day per user
+
 ```{r plotperdayperuserbrowse, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 ### Number of accesses per group of users
 plotdata <- data.downloads %>%
@@ -180,8 +193,10 @@ p  <- p + mytheme + theme(axis.title.x=element_text(size=16),
 p
 
 ```
+
+#### Total downloads per user
+
 ```{r fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
-## Requests per user
 plotdata <- data.downloads %>%
   count(username) %>%
   filter(n > 10) %>% 
@@ -206,6 +221,9 @@ dataaccessCount <- data.downloads %>%
   mutate(id=reorder(id, desc(n), ordered=TRUE)) %>% 
   arrange(desc(n))
 ```
+
+#### Popular entities
+
 ```{r plot100files, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 ### Most popular files
 plotdata <- dataaccessCount %>% 

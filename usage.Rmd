@@ -43,6 +43,8 @@ keepcols <- c(1, 3, 7, 11, 12, 14, 18, 19)
 
 config <- yaml.load_file("mysql_config.yml")
 
+projectId <- '1773109'
+
 con <- dbConnect(MySQL(),
                  user = config$username,
                  password = config$password,
@@ -55,12 +57,12 @@ beginDate <- as.POSIXct(beginTimestamp / 1000, origin="1970-01-01")
 endTimestamp <- 1450137600000
 endDate <- as.POSIXct(endTimestamp / 1000, origin="1970-01-01")
 
-q.downloads <- sprintf('select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,N.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "1773109") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");', beginTimestamp, endTimestamp)
+q.downloads <- sprintf('select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,N.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");', projectId, beginTimestamp, endTimestamp)
 
 data.downloads <- dbGetQuery(conn = con, statement=q.downloads) %>% 
   dplyr::rename(userid=USER_ID, id=ENTITY_ID)
 
-q.browse <- sprintf('select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,N.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "1773109") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");', beginTimestamp, endTimestamp)
+q.browse <- sprintf('select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,N.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");', projectId, beginTimestamp, endTimestamp)
 
 data.browse <- dbGetQuery(conn = con, statement=q.browse) %>% 
   dplyr::rename(userid=USER_ID, id=ENTITY_ID)
@@ -213,10 +215,10 @@ pUser <- ggplot(useraccessCount, aes(x=username, y=n))
 pUser <- pUser + geom_bar(stat="identity", aes(fill=group))
 pUser <- pUser + scale_y_log10()
 # pUser <- pUser + facet_wrap( ~ group, scale="free_x")
-pUser <- pUser + mytheme + theme(axis.text.x=element_text(angle=270, vjust=0.5))
+pUser <- pUser + mytheme + theme(axis.text.x=element_blank())
 pUser
 ```
-```{r}
+```{r include=FALSE, eval=FALSE}
 useraccessCount %>% mutate(badge=paste0("${badge?isUser=true&id=", userid, "&inlineWidget=true}")) %>%
   select(badge, group, n) %>% 
   dplyr::rename(user=badge) %>% 
