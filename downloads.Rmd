@@ -62,13 +62,10 @@ q.downloads <- sprintf('select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BEN
 data.downloads <- dbGetQuery(conn = con, statement=q.downloads) %>% 
   dplyr::rename(userid=USER_ID, id=ENTITY_ID)
 
-q.browse <- sprintf('select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,N.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");', projectId, beginTimestamp, endTimestamp)
-
-data.browse <- dbGetQuery(conn = con, statement=q.browse) %>% 
-  dplyr::rename(userid=USER_ID, id=ENTITY_ID)
-
 ```
-Usage statistics from `r as.Date(beginDate)` to `r as.Date(endDate)`.
+
+### Download usage statistics from `r as.Date(beginDate)` to `r as.Date(endDate)`.
+
 ```{r pcbcusers}
 # Get users at project level
 acl <- synGetEntityACL("syn1773109")
@@ -125,163 +122,20 @@ allUsers$group[allUsers$teamid %in% c("syn1773109", "3319054", "2224090")] <- "P
 allUsers$group[allUsers$teamid %in% c("273957")] <- "Sage"
 allUsers$group <- factor(allUsers$group, levels=c("PCBC", "Sage", "Other"), ordered=TRUE)
 ```
-## Downloads
-
-Statistics specifically for file downloads.
-```{r loadperday}
-perday <- data.downloads %>%
-  mutate(date=as.Date(as.character(DATE)),
-         userid=as.character(userid))
-
-perdayCount <- perday %>%
-  count(date)
-```
-```{r plotperday, fig.width=16, fig.height=8}
-plotdata <- perdayCount
-
-p <- ggplot(plotdata, aes(x=date, y=n)) + geom_line(size=1)
-p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
-                      #labels = date_format("%b %Y"),
-                      limits = c(as.Date(beginDate), as.Date(endDate)))
-
-p  <- p + labs(y="total accesses", x="Day")
-
-p  <- p + mytheme + theme(axis.title.x=element_blank(),
-                          axis.text.x=element_text(size=16, angle=270, vjust=0.5))
-p
-```
-### Users
-
-```{r}
-allUsersList <- ldply(unique(data.browse$userid),
-                      function(x) {
-                        foo <- synGetUserProfile(x); 
-                        data.frame(userid=as.character(x),
-                                   username=foo@userName)})
-
-allUsers <- left_join(allUsersList, allKnownUsers)
-
-allUsers$group <- "Other"
-allUsers$group[allUsers$teamid %in% c("syn1773109", "3319054", "2224090")] <- "PCBC"
-allUsers$group[allUsers$teamid %in% c("273957")] <- "Sage"
-allUsers$group <- factor(allUsers$group, levels=c("PCBC", "Sage", "Other"), ordered=TRUE)
-```
-```{r}
-useraccess <- perday %>% 
-  left_join(., allUsers) %>%
-  filter(!is.na(group))
-
-useraccessCount <- useraccess %>% 
-  count(username, userid, teamid, group) %>% 
-  arrange(n) %>%
-  ungroup() %>%
-  mutate(username=reorder(username, n, order=TRUE),
-         userid=reorder(userid, n, order=TRUE))
-```
-
-### Number of accesses per group of users
-```{r plotperdaypergroup, fig.width=20, fig.height=6}
-plotdata <- useraccess %>%
-  count(date, group) %>% 
-  dcast(date ~ group, value.var='n', fill=0) %>% 
-  reshape::melt(., id.vars=c("date"), variable.name="group", value.name="n") %>% 
-  dplyr::rename(group=variable, n=value)
-
-p <- ggplot(plotdata, aes(x=date, y=n, color=group)) + geom_point(size=4) 
-p <- p + geom_line()
-p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
-                      # labels = date_format("%b %Y"),
-                      limits = c(as.Date(beginDate), as.Date(endDate)))
-
-p <- p + scale_y_log10()
-# p  <- p + labs(y=expression(log[10]("access per user")), x="Day")
-p  <- p + labs(y="access per group", x="Day")
-# p <- p + facet_grid(group ~ .)
-p  <- p + mytheme + theme(axis.title.x=element_text(size=16),
-                          axis.text.x=element_text(size=16, angle=270, vjust=0.5),
-                          strip.text.y=element_text(size=20, angle=270),
-                          legend.position="top")
-p
-
-```
-### Number of accesses per user
-```{r plotperdayperuser, fig.width=20, fig.height=6}
-plotdata <- useraccess %>%
-  count(date, username, userid) %>%
-  left_join(allUsers)
-
-p <- ggplot(plotdata, aes(x=date, y=n, color=group)) + geom_point(size=4)
-p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
-                      # labels = date_format("%b %Y"),
-                      limits = c(as.Date(beginDate), as.Date(endDate)))
-
-p <- p + scale_y_log10()
-# p  <- p + labs(y=expression(log[10]("access per user")), x="Day")
-p  <- p + labs(y="access per user", x="Day")
-# p <- p + facet_grid(group ~ .)
-p  <- p + mytheme + theme(axis.title.x=element_text(size=16),
-                          axis.text.x=element_text(size=16, angle=270, vjust=0.5),
-                          strip.text.y=element_text(size=20, angle=270),
-                          legend.position="top")
-p
-
-```
-```{r fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
-## Requests per user
-
-pUser <- ggplot(useraccessCount, aes(x=username, y=n)) 
-pUser <- pUser + geom_bar(stat="identity", aes(fill=group))
-pUser <- pUser + scale_y_log10()
-# pUser <- pUser + facet_wrap( ~ group, scale="free_x")
-pUser <- pUser + mytheme + theme(axis.text.x=element_blank())
-pUser
-```
-```{r include=FALSE, eval=FALSE}
-useraccessCount %>% mutate(badge=paste0("${badge?isUser=true&id=", userid, "&inlineWidget=true}")) %>%
-  select(badge, group, n) %>% 
-  dplyr::rename(user=badge) %>% 
-  arrange(-n) %>% 
-  kable
-```
-### Data
-```{r loadtop100}
-topfiles <- perday %>% 
-  count(id, NAME) %>% 
-  ungroup %>% 
-  arrange(desc(n)) %>%
-  filter(n > 3)
-```
-### Most popular files
-```{r plot100files, fig.width=20, fig.height=6}
-plotdata <- topfiles %>% mutate(plotname=paste(id, NAME)) %>%head(100)
-plotdata$name <- factor(plotdata$id, levels=plotdata$id, order=TRUE)
-p <- ggplot(plotdata, aes(x=name, y=n))
-p <- p + geom_bar(stat="identity")
-p  <- p + mytheme + theme(axis.text.x=element_text(size=16, angle=270, vjust=0.5),
-                          axis.title.x=element_blank())
-p
-```
-```{r}
-topfiles %>% select(id, NAME, n) %>% kable
-
-```
-## Website access
-```{r loadperdaybrowse, include=FALSE, eval=FALSE}
-
+```{r loadperday, include=TRUE, eval=TRUE}
 ### Daily usage
-perday <- data.browse %>%
+data.downloads <- data.downloads %>%
   mutate(date=as.Date(as.character(DATE)),
          userid=as.character(userid)) %>% 
   left_join(., allUsers) %>% 
   filter(!is.na(group))
 
-perdayCount <- perday %>%
+perdayCount <- data.downloads %>%
   count(group, date) %>% 
   arrange(n)
 ```
-```{r plotperdaybrowse, fig.width=20, fig.height=6, include=FALSE, eval=FALSE}
+```{r plotperday, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 ### Per day usage, total
-
 plotdata <- perdayCount %>% 
   dcast(date ~ group, value.var='n', fill=0) %>% 
   reshape::melt(., id.vars=c("date"), variable.name="group", value.name="n") %>% 
@@ -291,29 +145,25 @@ p <- ggplot(plotdata, aes(x=date, y=n)) + geom_line(aes(group=group, color=group
 p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
                       #labels = date_format("%b %Y"),
                       limits = c(as.Date(beginDate), as.Date(endDate)))
-
 p  <- p + mytheme + theme(axis.title.x=element_blank(),
                           axis.text.x=element_text(size=16, angle=270))
 p
 ```
-```{r include=FALSE, eval=FALSE}
+```{r include=TRUE, eval=TRUE}
 ### Users
-useraccess <- perday %>% 
-  left_join(., allUsers) %>%
-  filter(!is.na(group))
-
-useraccessCount <- useraccess %>% 
+useraccessCount <- data.downloads %>% 
   count(username, userid, teamid, group) %>% 
-  arrange(n) %>%
   ungroup() %>%
+  arrange(n) %>%
   mutate(username=reorder(username, n, order=TRUE),
          userid=reorder(userid, n, order=TRUE))
 ```
-```{r plotperdayperuserbrowse, fig.width=20, fig.height=6, include=FALSE, eval=FALSE}
+```{r plotperdayperuserbrowse, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 ### Number of accesses per group of users
-plotdata <- useraccess %>%
-  count(date, username, userid) %>%
-  left_join(allUsers)
+plotdata <- data.downloads %>%
+  group_by(group) %>% 
+  count(date, username, userid, group) %>% 
+  ungroup()
 
 p <- ggplot(plotdata, aes(x=date, y=n, color=group)) + geom_point(size=3, position = position_jitter(w = 0, h = 0.1))
 p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
@@ -330,43 +180,46 @@ p  <- p + mytheme + theme(axis.title.x=element_text(size=16),
 p
 
 ```
-```{r fig.width=20, fig.height=6, include=FALSE, eval=FALSE}
+```{r fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 ## Requests per user
+plotdata <- data.downloads %>%
+  count(username) %>%
+  filter(n > 10) %>% 
+  ungroup() %>% 
+  left_join(data.downloads[, c("username", "group")]) %>% 
+  mutate(username=reorder(username, n, ordered=TRUE))
 
-pUser <- ggplot(useraccessCount, aes(x=username, y=n)) 
-pUser <- pUser + geom_bar(stat="identity", aes(fill=group))
+pUser <- ggplot(plotdata, aes(x=username, y=n)) 
+pUser <- pUser + geom_point(aes(color=group), size=3)
 pUser <- pUser + scale_y_log10()
-# pUser <- pUser + facet_wrap( ~ group, scale="free_x")
-pUser <- pUser + mytheme + theme(axis.text.x=element_text(angle=270))
+pUser <- pUser + mytheme + theme(axis.text.x=element_blank())
+pUser <- pUser + labs(x="User")
 pUser
 ```
-```{r include=FALSE, eval=FALSE}
-useraccessCount %>% mutate(badge=paste0("${badge?isUser=true&id=", userid, "&inlineWidget=true}")) %>%
-  select(badge, group, n) %>% 
-  dplyr::rename(user=badge) %>% 
-  arrange(-n) %>% 
-  kable
-```
-```{r loadtop100browse, include=FALSE, eval=FALSE}
+```{r loadtop100, include=TRUE, eval=TRUE}
 ### Data
-dataaccessCount <- perday %>% 
-  count(id) %>% 
+dataaccessCount <- data.downloads %>%
+  filter(!(NODE_TYPE == "project")) %>% 
+  count(id, NAME, NODE_TYPE) %>% 
   filter(n > 1, !str_detect(id, "acl")) %>%
+  ungroup() %>%
+  mutate(id=reorder(id, desc(n), ordered=TRUE)) %>% 
   arrange(desc(n))
-
-top100 <- dataaccessCount %>% left_join(recs)
-
 ```
-```{r plot100filesbrowse, fig.width=20, fig.height=6, include=FALSE, eval=FALSE}
+```{r plot100files, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 ### Most popular files
-plotdata <- top100 %>% mutate(plotname=paste(id, name)) %>%head(100)
-plotdata$name <- factor(plotdata$id, levels=plotdata$id, order=TRUE)
-p <- ggplot(plotdata, aes(x=name, y=n))
-p <- p + geom_bar(stat="identity")
-p  <- p + mytheme + theme(axis.text.x=element_text(size=16, angle=270),
-                          axis.title.x=element_blank())
+plotdata <- dataaccessCount %>% 
+  filter(n > 5)
+
+p <- ggplot(plotdata, aes(x=id, y=n))
+p <- p + geom_bar(stat="identity", aes(fill=NODE_TYPE))
+p <- p + facet_wrap(~ NODE_TYPE, scales="free", nrow = 3)
+p <- p + mytheme
+p <- p + theme(axis.text.x=element_text(size=10, angle=270, 
+                                        vjust=0.5),
+               axis.title.x=element_blank())
 p
 ```
-```{r include=FALSE, eval=FALSE}
-top100 %>% select(id, name, n) %>% kable
+```{r include=TRUE, eval=TRUE}
+plotdata %>% select(id, NAME, NODE_TYPE, n) %>% kable
 ```
