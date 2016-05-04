@@ -1,0 +1,232 @@
+---
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+```{r include=FALSE, eval=FALSE, echo=FALSE}
+synapseClient::synapseLogin()
+knit2synapse::storeAndKnitToFileEntity("./downloads.Rmd", 
+                                       parentId = "syn4892835", 
+                                       fileName = "Downloads")
+```
+
+```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
+library(plyr)
+library(dplyr)
+library(reshape)
+library(data.table)
+library(xtable)
+library(knitr)
+library(ggplot2)
+library(scales)
+library(stringr)
+library(synapseClient)
+library(RMySQL)
+library(yaml)
+library(lubridate)
+
+source("lib.R")
+
+synapseLogin()
+
+options(xtable.type="html")
+
+knitr::opts_chunk$set(
+  echo=FALSE,
+  warning=FALSE,
+  message=FALSE,
+  error = FALSE,
+  tidy = FALSE,
+  fig.width=20)
+
+mytheme <- theme_bw() + theme(axis.text=element_text(size=16),
+                              axis.title.x=element_text(size=18),
+                              axis.title.y=element_text(size=18, angle=90))
+
+# Full header of table
+header <- c("returnobjectid", "elapsems", "timestamp", "via", "host", "threadid", 
+            "useragent", "querystring", "sessionid", "xforwardedfor", "requesturl", 
+            "userid", "origin", "date", "method", "vmid", "instance", "stack",
+            "success", "responsestatus")
+
+# Columns we're interested in
+keepcols <- c(1, 3, 7, 11, 12, 14, 18, 19)
+
+```
+```{r mysql}
+# The tables are set up by month
+
+config <- yaml.load_file("mysql_config.yml")
+
+projectId <- '2862345'
+
+con <- dbConnect(MySQL(),
+                 user = config$username,
+                 password = config$password,
+                 host = config$host,
+                 dbname='warehouse')
+
+endDate <- as.POSIXct(Sys.Date(), origin="1970-01-01", tz="PST")
+endTimestamp <- as.numeric(endDate) * 1000
+
+beginDate <- endDate - months(3)
+beginTimestamp <- as.numeric(beginDate) * 1000
+
+# beginTimestamp <- 1446336000000
+# beginDate <- as.POSIXct(beginTimestamp / 1000, origin="1970-01-01")
+
+# endTimestamp <- 1450137600000
+# endDate <- as.POSIXct(endTimestamp / 1000, origin="1970-01-01")
+
+q.downloads <- sprintf('select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,AR.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");', projectId, beginTimestamp, endTimestamp)
+
+data.downloads <- dbGetQuery(conn = con, statement=q.downloads) %>% 
+  dplyr::rename(userid=USER_ID, id=ENTITY_ID)
+
+```
+
+### Download usage statistics from `r as.Date(beginDate)` to `r as.Date(endDate)`.
+
+```{r users}
+# Get users at project level
+aclUserList <- aclToUserList("syn2862345")
+aclUserList$teamId <- factor(aclUserList$teamId, 
+                             levels=c("syn2862345", 3323597, 3330234, 3332397),
+                             ordered=TRUE)
+
+aclUserList <- aclUserList %>%
+  group_by(userId) %>% 
+  arrange(teamId) %>% 
+  slice(1) %>% 
+  ungroup()
+
+# # Get sage employees
+# sageUserList <- getTeamMemberDF(273957)
+# userList <- rbind(userList, sageUserList)
+
+```
+
+```{r summaryuseraccess}
+# Get user profile info for users in data download records
+allUsersList <- ldply(unique(data.downloads$userid),
+                      function(x) {
+                        foo <- synGetUserProfile(x); 
+                        data.frame(userId=as.character(x),
+                                   userName=foo@userName)})
+
+allUsers <- left_join(allUsersList, aclUserList)
+levels(allUsers$teamId) <- c(levels(allUsers$teamId), "None") 
+allUsers$teamId[is.na(allUsers$teamId)] <- "None"
+
+allUsers$group <- "Other"
+teamInfo <- ddply(allUsers %>% filter(teamId != "None") %>% select(teamId) %>% unique(),
+                  .(teamId),
+                  function(x) {
+                    tmp <- synRestGET(sprintf("/team/%s", x$teamId)); 
+                    data.frame(teamId=x$teamId, teamName=tmp$name)
+                    }
+                  )
+
+
+allUsers <- left_join(allUsers, teamInfo, by="teamId")
+levels(allUsers$teamName) <- c(levels(allUsers$teamName), "None") 
+allUsers$teamName[is.na(allUsers$teamName)] <- "None"
+```
+
+```{r loadperday, include=TRUE, eval=TRUE}
+### Daily usage
+data.downloads <- data.downloads %>%
+  mutate(date=as.Date(as.character(DATE)),
+         userId=as.character(userid)) %>% 
+  left_join(., allUsers)
+
+perdayCount <- data.downloads %>%
+  count(teamName, date) %>% 
+  arrange(n)
+
+```
+
+#### Downloads per day
+```{r plotperday, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
+### Per day usage, total
+plotdata <- perdayCount %>% 
+  dcast(date ~ teamName, value.var='n', fill=0) %>% 
+  reshape::melt(., id.vars=c("date"), variable.name="teamName", value.name="n") %>% 
+  dplyr::rename(group=variable, n=value)
+
+p <- ggplot(plotdata, aes(x=date, y=n)) + geom_line(aes(group=group, color=group), size=1)
+# p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
+#                       #labels = date_format("%b %Y"),
+#                       limits = c(as.Date(beginDate), as.Date(endDate)))
+p <- p + scale_color_brewer(palette = "Set1")
+p  <- p + mytheme + theme(axis.title.x=element_blank(),
+                          axis.text.x=element_text(size=16, angle=270),
+                          legend.position='top')
+p
+```
+
+```{r include=TRUE, eval=TRUE}
+### Users
+useraccessCount <- data.downloads %>% 
+  count(userName, userId, teamId, teamName) %>% 
+  ungroup() %>%
+  arrange(n) %>%
+  mutate(userName=reorder(userName, n, order=TRUE),
+         userId=reorder(userId, n, order=TRUE))
+```
+
+#### Downloads per day per user
+
+```{r plotperdayperuserbrowse, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
+### Number of accesses per group of users
+plotdata <- data.downloads %>%
+  group_by(group) %>% 
+  count(date, userName, userId, teamName) %>% 
+  ungroup()
+
+p <- ggplot(plotdata, aes(x=date, y=n, color=teamName)) + geom_point(size=3, position = position_jitter(w = 0, h = 0.1))
+# p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
+#                       # labels = date_format("%b %Y"),
+#                       limits = c(as.Date(beginDate), as.Date(endDate)))
+p <- p + scale_color_brewer(palette = "Set1")
+p <- p + scale_y_log10()
+p  <- p + labs(y=expression(log[10]("access per user")), x="Day")
+# p <- p + facet_grid(group ~ .)
+p  <- p + mytheme + theme(axis.title.x=element_text(size=16),
+                          axis.text.x=element_text(size=16, angle=270),
+                          strip.text.y=element_text(size=20, angle=270),
+                          legend.position="top")
+p
+
+```
+
+#### Total downloads per user
+```{r fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
+plotdata <- data.downloads %>%
+  count(userName) %>%
+  filter(n > 10) %>% 
+  ungroup() %>% 
+  left_join(data.downloads[, c("userName", "teamName")]) %>% 
+  mutate(userName=reorder(userName, n, ordered=TRUE))
+
+pUser <- ggplot(plotdata, aes(x=userName, y=n)) 
+pUser <- pUser + geom_point(aes(color=teamName), size=3)
+pUser <- pUser + scale_y_log10()
+pUser <- pUser + scale_color_brewer(palette = "Set1")
+pUser <- pUser + mytheme + theme(axis.text.x=element_blank())
+pUser <- pUser + labs(x="User")
+pUser
+```
+
+#### Entity Usage (more than 5 downloads)
+```{r include=TRUE, eval=TRUE}
+### Data
+dataaccessCount <- data.downloads %>%
+  count(id, NAME, NODE_TYPE) %>% 
+  filter(n > 5, !str_detect(id, "acl")) %>%
+  ungroup() %>% 
+  arrange(desc(n))
+dataaccessCount %>% select(id, NAME, NODE_TYPE, n) %>% kable
+
+```
