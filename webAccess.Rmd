@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ---
 output: 
   html_document: 
@@ -11,6 +12,8 @@ knit2synapse::storeAndKnitToFileEntity("./webAccess.Rmd",
                                        fileName = "Web Access")
 ```
 
+=======
+>>>>>>> c68ab9da55b2d6b7b530442f7e96d14e671dfc3c
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
 library(plyr)
 library(dplyr)
@@ -26,8 +29,11 @@ library(RMySQL)
 library(yaml)
 library(lubridate)
 
+<<<<<<< HEAD
 source("lib.R")
 
+=======
+>>>>>>> c68ab9da55b2d6b7b530442f7e96d14e671dfc3c
 synapseLogin()
 
 options(xtable.type="html")
@@ -55,9 +61,17 @@ keepcols <- c(1, 3, 7, 11, 12, 14, 18, 19)
 
 ```
 ```{r mysql}
+<<<<<<< HEAD
 config <- yaml.load_file("mysql_config.yml")
 
 projectId <- '2862345'
+=======
+# The tables are set up by month
+
+config <- yaml.load_file("mysql_config.yml")
+
+projectId <- '1773109'
+>>>>>>> c68ab9da55b2d6b7b530442f7e96d14e671dfc3c
 
 con <- dbConnect(MySQL(),
                  user = config$username,
@@ -70,12 +84,18 @@ endTimestamp <- as.numeric(endDate) * 1000
 
 beginDate <- endDate - months(1)
 beginTimestamp <- as.numeric(beginDate) * 1000
+<<<<<<< HEAD
 # 
 q.browse <- sprintf('select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");', projectId, beginTimestamp, endTimestamp)
+=======
+
+q.browse <- sprintf('select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,N.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");', projectId, beginTimestamp, endTimestamp)
+>>>>>>> c68ab9da55b2d6b7b530442f7e96d14e671dfc3c
 
 data.browse <- dbGetQuery(conn = con, statement=q.browse) %>% 
   dplyr::rename(userid=USER_ID, id=ENTITY_ID)
 
+<<<<<<< HEAD
 foo <- data.browse %>% filter(RESPONSE_STATUS == 200)  %>% count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME) %>% ungroup()
 
 data.browse <- foo
@@ -101,11 +121,58 @@ aclUserList <- aclUserList %>%
 
 ```
 
+=======
+```
+### Web access usage statistics from `r as.Date(beginDate)` to `r as.Date(endDate)`.
+
+```{r pcbcusers}
+# Get users at project level
+acl <- synGetEntityACL("syn1773109")
+
+aclUserList <- ldply(acl@resourceAccess@content, 
+                     function(x) data.frame(userid=as.character(x@principalId),
+                                            teamid="syn1773109"))
+
+# Get users as part of core bioinfo team
+coreUserListREST <- synRestGET("/teamMembers/3319054?limit=100")
+coreUserList <- ldply(coreUserListREST$results,
+                      function(x) data.frame(userid=as.character(x$member$ownerId), 
+                                             teamid=as.character(x$teamId)))
+
+coreUserList <- coreUserList %>%
+  filter(!(userid %in% aclUserList$userid))
+
+# Get all PCBC users
+pcbcUserListREST <- synRestGET("/teamMembers/2224090?limit=100")
+pcbcUserList <- ldply(pcbcUserListREST$results, 
+                      function(x) data.frame(userid=as.character(x$member$ownerId), 
+                                             teamid=as.character(x$teamId)))
+
+# Remove users in the PCBC group that are also in the ACL or core bioinfo group
+pcbcUserList <- pcbcUserList %>%
+  filter(!(userid %in% c(as.character(aclUserList$userid), 
+                         as.character(coreUserList$userid))))
+
+# Get sage employees
+sageUserListREST <- synRestGET("/teamMembers/273957?limit=100")
+sageUserList <- ldply(sageUserListREST$results,
+                      function(x) data.frame(userid=as.character(x$member$ownerId), 
+                                             teamid=as.character(x$teamId)))
+
+sageUserList <- sageUserList %>%
+  filter(!(userid %in% c(as.character(aclUserList$userid), 
+                         as.character(coreUserList$userid),
+                         as.character(pcbcUserList$userid))))
+
+allKnownUsers <- rbind(aclUserList, coreUserList, pcbcUserList, sageUserList)
+```
+>>>>>>> c68ab9da55b2d6b7b530442f7e96d14e671dfc3c
 ```{r summaryuseraccess}
 # Get user profile info for users in data download records
 allUsersList <- ldply(unique(data.browse$userid),
                       function(x) {
                         foo <- synGetUserProfile(x); 
+<<<<<<< HEAD
                         data.frame(userId=as.character(x),
                                    userName=foo@userName)})
 
@@ -128,11 +195,24 @@ levels(allUsers$teamName) <- c(levels(allUsers$teamName), "None")
 allUsers$teamName[is.na(allUsers$teamName)] <- "None"
 ```
 
+=======
+                        data.frame(userid=as.character(x),
+                                   username=foo@userName)})
+
+allUsers <- left_join(allUsersList, allKnownUsers)
+
+allUsers$group <- "Other"
+allUsers$group[allUsers$teamid %in% c("syn1773109", "3319054", "2224090")] <- "PCBC"
+allUsers$group[allUsers$teamid %in% c("273957")] <- "Sage"
+allUsers$group <- factor(allUsers$group, levels=c("PCBC", "Sage", "Other"), ordered=TRUE)
+```
+>>>>>>> c68ab9da55b2d6b7b530442f7e96d14e671dfc3c
 #### Website access per day
 ```{r loadperday, include=TRUE, eval=TRUE}
 ### Daily usage
 data.browse <- data.browse %>%
   mutate(date=as.Date(as.character(DATE)),
+<<<<<<< HEAD
          userId=as.character(userid)) %>% 
   left_join(., allUsers)
 
@@ -157,11 +237,35 @@ p <- p + scale_color_brewer(palette = "Set1")
 p  <- p + mytheme + theme(axis.title.x=element_blank(),
                           axis.text.x=element_text(size=16, angle=270),
                           legend.position="top")
+=======
+         userid=as.character(userid)) %>% 
+  left_join(., allUsers) %>% 
+  filter(!is.na(group))
+
+perdayCount <- data.browse %>%
+  count(group, date) %>% 
+  arrange(n)
+```
+```{r plotperday, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
+### Per day usage, total
+plotdata <- perdayCount %>% 
+  dcast(date ~ group, value.var='n', fill=0) %>% 
+  reshape::melt(., id.vars=c("date"), variable.name="group", value.name="n") %>% 
+  dplyr::rename(group=variable, n=value)
+
+p <- ggplot(plotdata, aes(x=date, y=n)) + geom_line(aes(group=group, color=group), size=1)
+p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
+                      #labels = date_format("%b %Y"),
+                      limits = c(as.Date(beginDate), as.Date(endDate)))
+p  <- p + mytheme + theme(axis.title.x=element_blank(),
+                          axis.text.x=element_text(size=16, angle=270))
+>>>>>>> c68ab9da55b2d6b7b530442f7e96d14e671dfc3c
 p
 ```
 ```{r include=TRUE, eval=TRUE}
 ### Users
 useraccessCount <- data.browse %>% 
+<<<<<<< HEAD
   count(userName, userId, teamId, teamName) %>% 
   ungroup() %>%
   arrange(n) %>%
@@ -181,6 +285,27 @@ p <- p + geom_point(size=3, position = position_jitter(w = 0, h = 0.1))
 # p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
 #                       # labels = date_format("%b %Y"),
 #                       limits = c(as.Date(beginDate), as.Date(endDate)))
+=======
+  count(username, userid, teamid, group) %>% 
+  ungroup() %>%
+  arrange(n) %>%
+  mutate(username=reorder(username, n, order=TRUE),
+         userid=reorder(userid, n, order=TRUE))
+```
+
+#### Accesses per day per user
+
+```{r plotperdayperuser, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
+plotdata <- data.browse %>%
+  group_by(group) %>% 
+  count(date, username, userid, group) %>% 
+  ungroup()
+
+p <- ggplot(plotdata, aes(x=date, y=n, color=group)) + geom_point(size=3, position = position_jitter(w = 0, h = 0.1))
+p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
+                      # labels = date_format("%b %Y"),
+                      limits = c(as.Date(beginDate), as.Date(endDate)))
+>>>>>>> c68ab9da55b2d6b7b530442f7e96d14e671dfc3c
 p <- p + scale_color_brewer(palette = "Set1")
 p <- p + scale_y_log10()
 p  <- p + labs(y=expression(log[10]("access per user")), x="Day")
@@ -194,6 +319,7 @@ p
 ```
 
 #### Total accesses per user
+<<<<<<< HEAD
 ```{r fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 plotdata <- data.browse %>%
   count(userName) %>%
@@ -222,4 +348,50 @@ dataaccessCount <- data.browse %>%
   ungroup() %>% 
   arrange(desc(n))
 dataaccessCount %>% select(id, NAME, NODE_TYPE, n) %>% kable
+=======
+
+```{r fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
+plotdata <- data.browse %>%
+  count(username) %>%
+  filter(n > 10) %>% 
+  ungroup() %>% 
+  left_join(data.browse[, c("username", "group")]) %>% 
+  mutate(username=reorder(username, n, ordered=TRUE))
+
+pUser <- ggplot(plotdata, aes(x=username, y=n)) 
+pUser <- pUser + geom_point(aes(color=group), size=3)
+pUser <- pUser + scale_y_log10()
+pUser <- pUser + mytheme + theme(axis.text.x=element_blank())
+pUser <- pUser + labs(x="User")
+pUser
+```
+```{r loadtop100, include=TRUE, eval=TRUE}
+### Data
+dataaccessCount <- data.browse %>%
+  filter(!(NODE_TYPE == "project")) %>% 
+  count(id, NAME, NODE_TYPE) %>% 
+  filter(n > 1, !str_detect(id, "acl")) %>%
+  ungroup() %>%
+  mutate(id=reorder(id, desc(n), ordered=TRUE)) %>% 
+  arrange(desc(n))
+```
+
+#### Popular entities
+
+```{r plot100files, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
+plotdata <- dataaccessCount %>% 
+  filter(n > 5)
+
+p <- ggplot(plotdata, aes(x=id, y=n))
+p <- p + geom_bar(stat="identity", aes(fill=NODE_TYPE))
+p <- p + facet_wrap(~ NODE_TYPE, scales="free", nrow = 3)
+p <- p + mytheme
+p <- p + theme(axis.text.x=element_text(size=10, angle=270, 
+                                        vjust=0.5),
+               axis.title.x=element_blank())
+p
+```
+```{r include=TRUE, eval=TRUE}
+plotdata %>% select(id, NAME, NODE_TYPE, n) %>% kable
+>>>>>>> c68ab9da55b2d6b7b530442f7e96d14e671dfc3c
 ```
