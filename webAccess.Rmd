@@ -60,6 +60,7 @@ config <- yaml.load_file("mysql_config.yml")
 projectId <- '2862345'
 nMonths <- 12
 useTeamGrouping <- TRUE
+aclTeamOrder <- c(paste0("syn", projectId), 3323597, 3330234, 3332397)
 
 con <- dbConnect(MySQL(),
                  user = config$username,
@@ -104,7 +105,7 @@ queryData <- res %>%
 # Get users at project level
 aclUserList <- aclToUserList(paste0("syn", projectId))
 aclUserList$teamId <- factor(aclUserList$teamId, 
-                             levels=c(paste0("syn", projectId), 3323597, 3330234, 3332397),
+                             levels=aclTeamOrder,
                              ordered=TRUE)
 
 aclUserList <- aclUserList %>%
