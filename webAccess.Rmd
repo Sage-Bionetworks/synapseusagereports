@@ -98,7 +98,7 @@ queryData <- res %>%
          dateGrouping=floor_date(date, unit="month"))
 
 ```
-### Web access usage statistics from `r min(as.Date(monthBreaksDf$begin))` to `r max(as.Date(monthBreaksDf$endTimestamp))`.
+### Web access usage statistics from `r min(monthBreaksDf$beginTime)` to `r max(monthBreaksDf$endTime)`.
 
 ```{r users}
 # Get users at project level
@@ -152,7 +152,7 @@ queryData <- queryData %>%
 ```
 
 #### Website access per month
-```{r loadperday, include=TRUE, eval=TRUE}
+```{r loadpermonth, include=TRUE, eval=TRUE}
 if (useTeamGrouping) {
   dateGroupingCount <- queryData %>%
     count(teamName, dateGrouping) %>% 
