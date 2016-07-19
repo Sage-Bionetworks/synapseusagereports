@@ -6,9 +6,9 @@ output:
 
 ```{r include=FALSE, eval=FALSE, echo=FALSE}
 synapseClient::synapseLogin()
-knit2synapse::storeAndKnitToFileEntity("./downloads.Rmd", 
+knit2synapse::storeAndKnitToFileEntity("./webAccess.Rmd", 
                                        parentId = "syn4892835", 
-                                       fileName = "Downloads")
+                                       fileName = "Web Access")
 ```
 
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
@@ -54,12 +54,12 @@ header <- c("returnobjectid", "elapsems", "timestamp", "via", "host", "threadid"
 keepcols <- c(1, 3, 7, 11, 12, 14, 18, 19)
 
 ```
-```{r mysql}
-# The tables are set up by month
-
+```{r config}
 config <- yaml.load_file("mysql_config.yml")
 
 projectId <- '2862345'
+nMonths <- 3
+useTeamGrouping <- TRUE
 
 con <- dbConnect(MySQL(),
                  user = config$username,
@@ -70,29 +70,41 @@ con <- dbConnect(MySQL(),
 endDate <- as.POSIXct(Sys.Date(), origin="1970-01-01", tz="PST")
 endTimestamp <- as.numeric(endDate) * 1000
 
-beginDate <- endDate - months(3)
-beginTimestamp <- as.numeric(beginDate) * 1000
+monthBreaks <- as.POSIXct(unlist(lapply(0:nMonths, function(x) endDate - months(x))),
+                          origin="1970-01-01")
 
-# beginTimestamp <- 1446336000000
-# beginDate <- as.POSIXct(beginTimestamp / 1000, origin="1970-01-01")
+monthBreaksDf <- data.frame(beginTime=monthBreaks[2:(nMonths + 1)],
+                            endTime=monthBreaks[1:nMonths])
 
-# endTimestamp <- 1450137600000
-# endDate <- as.POSIXct(endTimestamp / 1000, origin="1970-01-01")
-
-q.downloads <- sprintf('select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,AR.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");', projectId, beginTimestamp, endTimestamp)
-
-data.downloads <- dbGetQuery(conn = con, statement=q.downloads) %>% 
-  dplyr::rename(userid=USER_ID, id=ENTITY_ID)
+timestampBreaksDf <- monthBreaksDf %>% 
+  mutate(beginTime=as.numeric(beginTime) * 1000,
+         endTime=as.numeric(endTime) * 1000)
+# 
+qTemplate <- 'select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,AR.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");'
 
 ```
 
-### Download usage statistics from `r as.Date(beginDate)` to `r as.Date(endDate)`.
+```{r domysqlquery}
+res <- ddply(timestampBreaksDf, .(beginTime, endTime),
+             function (x) doQuery(template=qTemplate, 
+                                  con=con,
+                                  projectId=projectId, 
+                                  beginTimestamp=x$beginTime, 
+                                  endTimestamp=x$endTime))
+
+queryData <- res %>%
+  mutate(date=as.Date(as.character(DATE)),
+         userId=as.character(userid), 
+         dateGrouping=floor_date(date, unit="month"))
+
+```
+### Web access usage statistics from `r min(monthBreaksDf$beginTime)` to `r max(monthBreaksDf$endTime)`.
 
 ```{r users}
 # Get users at project level
-aclUserList <- aclToUserList("syn2862345")
+aclUserList <- aclToUserList(paste0("syn", projectId))
 aclUserList$teamId <- factor(aclUserList$teamId, 
-                             levels=c("syn2862345", 3323597, 3330234, 3332397),
+                             levels=c(paste0("syn", projectId), 3323597, 3330234, 3332397),
                              ordered=TRUE)
 
 aclUserList <- aclUserList %>%
@@ -109,7 +121,7 @@ aclUserList <- aclUserList %>%
 
 ```{r summaryuseraccess}
 # Get user profile info for users in data download records
-allUsersList <- ldply(unique(data.downloads$userid),
+allUsersList <- ldply(unique(queryData$userid),
                       function(x) {
                         foo <- synGetUserProfile(x); 
                         data.frame(userId=as.character(x),
@@ -134,41 +146,74 @@ levels(allUsers$teamName) <- c(levels(allUsers$teamName), "None")
 allUsers$teamName[is.na(allUsers$teamName)] <- "None"
 ```
 
+```{r userJoin}
+queryData <- queryData %>%
+  left_join(., allUsers)
+```
+
+#### Website access per month
+```{r loadpermonth, include=TRUE, eval=TRUE}
+if (useTeamGrouping) {
+  dateGroupingCount <- queryData %>%
+    count(teamName, dateGrouping) %>% 
+    reshape2::dcast(teamName ~ dateGrouping)
+} else {
+  dateGroupingCount <- queryData %>%
+    mutate(teamName='All') %>% 
+    count(teamName, dateGrouping) %>% 
+    reshape2::dcast(teamName ~ dateGrouping)
+}
+
+dateGroupingCount %>% kable
+```
+
+#### Website access per day
 ```{r loadperday, include=TRUE, eval=TRUE}
 ### Daily usage
-data.downloads <- data.downloads %>%
-  mutate(date=as.Date(as.character(DATE)),
-         userId=as.character(userid)) %>% 
-  left_join(., allUsers)
+# queryData <- queryData %>%
+#   mutate(date=as.Date(as.character(DATE)),
+#          userId=as.character(userid)) %>% 
+#   left_join(., allUsers)
 
-perdayCount <- data.downloads %>%
-  count(teamName, date) %>% 
-  arrange(n)
-
+if (useTeamGrouping) {
+  perdayCount <- queryData %>%
+    count(teamName, date) %>% 
+    arrange(n)
+} else { 
+  perdayCount <- queryData %>%
+    mutate(teamName="All") %>% 
+    count(teamName, date) %>% 
+    arrange(n)
+}
 ```
 
-#### Downloads per day
 ```{r plotperday, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 ### Per day usage, total
+
 plotdata <- perdayCount %>% 
-  dcast(date ~ teamName, value.var='n', fill=0) %>% 
-  reshape::melt(., id.vars=c("date"), variable.name="teamName", value.name="n") %>% 
+  reshape2::dcast(date ~ teamName, value.var='n', fill=0) %>% 
+  reshape::melt(., id.vars=c("date"), 
+                variable.name="teamName", value.name="n") %>% 
   dplyr::rename(group=variable, n=value)
 
-p <- ggplot(plotdata, aes(x=date, y=n)) + geom_line(aes(group=group, color=group), size=1)
-# p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
-#                       #labels = date_format("%b %Y"),
-#                       limits = c(as.Date(beginDate), as.Date(endDate)))
+p <- ggplot(plotdata, aes(x=date, y=n))
+p <- p + geom_line(aes(group=group, color=group), size=1)
+if (useTeamGrouping) {
 p <- p + scale_color_brewer(palette = "Set1")
+} else {
+  p <- p + scale_color_manual(values="black")
+}
+# p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
+#                       labels = date_format("%b-%Y"),
+#                       limits = c(as.Date(beginDate), as.Date(endDate)))
 p  <- p + mytheme + theme(axis.title.x=element_blank(),
                           axis.text.x=element_text(size=16, angle=270),
-                          legend.position='top')
+                          legend.position="top")
 p
 ```
-
 ```{r include=TRUE, eval=TRUE}
 ### Users
-useraccessCount <- data.downloads %>% 
+useraccessCount <- queryData %>% 
   count(userName, userId, teamId, teamName) %>% 
   ungroup() %>%
   arrange(n) %>%
@@ -176,20 +221,34 @@ useraccessCount <- data.downloads %>%
          userId=reorder(userId, n, order=TRUE))
 ```
 
-#### Downloads per day per user
+#### Accesses per day per user
+```{r plotperdayperuser, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 
-```{r plotperdayperuserbrowse, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
-### Number of accesses per group of users
-plotdata <- data.downloads %>%
-  group_by(group) %>% 
+if (useTeamGrouping) {
+plotdata <- queryData %>%
+  group_by(teamName) %>% 
   count(date, userName, userId, teamName) %>% 
   ungroup()
+} else {
+plotdata <- queryData %>%
+  mutate(teamName="All")
+  group_by(teamName) %>% 
+  count(date, userName, userId, teamName) %>% 
+  ungroup()
+}
 
-p <- ggplot(plotdata, aes(x=date, y=n, color=teamName)) + geom_point(size=3, position = position_jitter(w = 0, h = 0.1))
+p <- ggplot(plotdata, aes(x=date, y=n, color=teamName))
+p <- p + geom_point(size=3, position = position_jitter(w = 0, h = 0.1))
+
+if (useTeamGrouping) {
+  p <- p + scale_color_brewer(palette = "Set1")
+} else {
+  p <- p + scale_color_manual(values="black")
+}
+
 # p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
 #                       # labels = date_format("%b %Y"),
 #                       limits = c(as.Date(beginDate), as.Date(endDate)))
-p <- p + scale_color_brewer(palette = "Set1")
 p <- p + scale_y_log10()
 p  <- p + labs(y=expression(log[10]("access per user")), x="Day")
 # p <- p + facet_grid(group ~ .)
@@ -201,32 +260,41 @@ p
 
 ```
 
-#### Total downloads per user
+#### Total accesses per user
 ```{r fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
-plotdata <- data.downloads %>%
+plotdata <- queryData %>%
   count(userName) %>%
-  filter(n > 10) %>% 
+  # filter(n > 1) %>% 
   ungroup() %>% 
-  left_join(data.downloads[, c("userName", "teamName")]) %>% 
+  left_join(queryData[, c("userName", "teamName")]) %>% 
   mutate(userName=reorder(userName, n, ordered=TRUE))
+
+if (!useTeamGrouping) {
+  plotdata$teamName <- "All"
+}
 
 pUser <- ggplot(plotdata, aes(x=userName, y=n)) 
 pUser <- pUser + geom_point(aes(color=teamName), size=3)
+if (useTeamGrouping) {
+  pUser <- pUser + scale_color_brewer(palette = "Set1")
+} else{
+  pUser <- pUser + scale_color_manual(values="black")
+}
+
 pUser <- pUser + scale_y_log10()
-pUser <- pUser + scale_color_brewer(palette = "Set1")
-pUser <- pUser + mytheme + theme(axis.text.x=element_blank())
+pUser <- pUser + mytheme + theme(axis.text.x=element_blank(), legend.position='top')
+# pUser <- pUser + mytheme + theme(axis.text.x=element_text(angle=270, hjust=0.5))
 pUser <- pUser + labs(x="User")
 pUser
 ```
 
-#### Entity Usage (more than 5 downloads)
+#### Entity Usage (more than 5 accesses)
 ```{r include=TRUE, eval=TRUE}
 ### Data
-dataaccessCount <- data.downloads %>%
+dataaccessCount <- queryData %>%
   count(id, NAME, NODE_TYPE) %>% 
   filter(n > 5, !str_detect(id, "acl")) %>%
   ungroup() %>% 
   arrange(desc(n))
 dataaccessCount %>% select(id, NAME, NODE_TYPE, n) %>% kable
-
 ```
