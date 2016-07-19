@@ -264,7 +264,7 @@ p
 ```{r fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 plotdata <- queryData %>%
   count(userName) %>%
-  filter(n > 10) %>% 
+  # filter(n > 10) %>% 
   ungroup() %>% 
   left_join(queryData[, c("userName", "teamName")]) %>% 
   mutate(userName=reorder(userName, n, ordered=TRUE))
