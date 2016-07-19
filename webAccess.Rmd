@@ -80,19 +80,19 @@ timestampBreaksDf <- monthBreaksDf %>%
   mutate(beginTime=as.numeric(beginTime) * 1000,
          endTime=as.numeric(endTime) * 1000)
 # 
-qBrowseTemplate <- 'select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");'
+qTemplate <- 'select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");'
 
 ```
 
 ```{r domysqlquery}
 res <- ddply(timestampBreaksDf, .(beginTime, endTime),
-             function (x) doQuery(template=qBrowseTemplate, 
+             function (x) doQuery(template=qTemplate, 
                                   con=con,
                                   projectId=projectId, 
                                   beginTimestamp=x$beginTime, 
                                   endTimestamp=x$endTime))
 
-data.browse <- res %>%
+queryData <- res %>%
   mutate(date=as.Date(as.character(DATE)),
          userId=as.character(userid), 
          dateGrouping=floor_date(date, unit="month"))
@@ -121,7 +121,7 @@ aclUserList <- aclUserList %>%
 
 ```{r summaryuseraccess}
 # Get user profile info for users in data download records
-allUsersList <- ldply(unique(data.browse$userid),
+allUsersList <- ldply(unique(queryData$userid),
                       function(x) {
                         foo <- synGetUserProfile(x); 
                         data.frame(userId=as.character(x),
@@ -147,18 +147,18 @@ allUsers$teamName[is.na(allUsers$teamName)] <- "None"
 ```
 
 ```{r userJoin}
-data.browse <- data.browse %>%
+queryData <- queryData %>%
   left_join(., allUsers)
 ```
 
 #### Website access per month
 ```{r loadperday, include=TRUE, eval=TRUE}
 if (useTeamGrouping) {
-  dateGroupingCount <- data.browse %>%
+  dateGroupingCount <- queryData %>%
     count(teamName, dateGrouping) %>% 
     reshape2::dcast(teamName ~ dateGrouping)
 } else {
-  dateGroupingCount <- data.browse %>%
+  dateGroupingCount <- queryData %>%
     mutate(teamName='All') %>% 
     count(teamName, dateGrouping) %>% 
     reshape2::dcast(teamName ~ dateGrouping)
@@ -170,17 +170,17 @@ dateGroupingCount %>% kable
 #### Website access per day
 ```{r loadperday, include=TRUE, eval=TRUE}
 ### Daily usage
-# data.browse <- data.browse %>%
+# queryData <- queryData %>%
 #   mutate(date=as.Date(as.character(DATE)),
 #          userId=as.character(userid)) %>% 
 #   left_join(., allUsers)
 
 if (useTeamGrouping) {
-  perdayCount <- data.browse %>%
+  perdayCount <- queryData %>%
     count(teamName, date) %>% 
     arrange(n)
 } else { 
-  perdayCount <- data.browse %>%
+  perdayCount <- queryData %>%
     mutate(teamName="All") %>% 
     count(teamName, date) %>% 
     arrange(n)
@@ -213,7 +213,7 @@ p
 ```
 ```{r include=TRUE, eval=TRUE}
 ### Users
-useraccessCount <- data.browse %>% 
+useraccessCount <- queryData %>% 
   count(userName, userId, teamId, teamName) %>% 
   ungroup() %>%
   arrange(n) %>%
@@ -225,12 +225,12 @@ useraccessCount <- data.browse %>%
 ```{r plotperdayperuser, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 
 if (useTeamGrouping) {
-plotdata <- data.browse %>%
+plotdata <- queryData %>%
   group_by(teamName) %>% 
   count(date, userName, userId, teamName) %>% 
   ungroup()
 } else {
-plotdata <- data.browse %>%
+plotdata <- queryData %>%
   mutate(teamName="All")
   group_by(teamName) %>% 
   count(date, userName, userId, teamName) %>% 
@@ -262,11 +262,11 @@ p
 
 #### Total accesses per user
 ```{r fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
-plotdata <- data.browse %>%
+plotdata <- queryData %>%
   count(userName) %>%
   filter(n > 10) %>% 
   ungroup() %>% 
-  left_join(data.browse[, c("userName", "teamName")]) %>% 
+  left_join(queryData[, c("userName", "teamName")]) %>% 
   mutate(userName=reorder(userName, n, ordered=TRUE))
 
 if (!useTeamGrouping) {
@@ -291,7 +291,7 @@ pUser
 #### Entity Usage (more than 5 accesses)
 ```{r include=TRUE, eval=TRUE}
 ### Data
-dataaccessCount <- data.browse %>%
+dataaccessCount <- queryData %>%
   count(id, NAME, NODE_TYPE) %>% 
   filter(n > 5, !str_detect(id, "acl")) %>%
   ungroup() %>% 
