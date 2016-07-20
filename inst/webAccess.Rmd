@@ -3,10 +3,10 @@ output:
   html_document: 
     keep_md: yes
 params:
-  projectId: 2862345
+  projectId: !r NA
   nMonths: 2
   useTeamGrouping: TRUE
-  aclTeamOrder: !r c("syn2862345", 3323597, 3330234, 3332397)
+  aclTeamOrder: !r NA
 ---
 
 ```{r include=FALSE, eval=FALSE, echo=FALSE}
