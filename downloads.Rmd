@@ -2,6 +2,11 @@
 output: 
   html_document: 
     keep_md: yes
+params:
+  projectId: 2862345
+  nMonths: 2
+  useTeamGrouping: TRUE
+  aclTeamOrder: !r c("syn2862345", 3323597, 3330234, 3332397)
 ---
 
 ```{r include=FALSE, eval=FALSE, echo=FALSE}
@@ -57,10 +62,10 @@ keepcols <- c(1, 3, 7, 11, 12, 14, 18, 19)
 ```{r config}
 config <- yaml.load_file("mysql_config.yml")
 
-projectId <- '2862345'
-nMonths <- 3
-useTeamGrouping <- TRUE
-aclTeamOrder <- c(paste0("syn", projectId), 3323597, 3330234, 3332397)
+projectId <- params$projectId
+nMonths <- params$nMonths
+useTeamGrouping <- params$useTeamGrouping
+aclTeamOrder <- params$aclTeamOrder
 
 con <- dbConnect(MySQL(),
                  user = config$username,
