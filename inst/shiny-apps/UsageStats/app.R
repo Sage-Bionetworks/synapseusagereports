@@ -35,7 +35,7 @@ ui <- shinyUI(fluidPage(
                      "Project ID:"),
          actionButton('lookup', "Lookup Project"),
          uiOutput('teamList'),
-         selectInput('reportType', "Report Type:", choices=c("test", "webAccess", "downloads"), 
+         selectInput('reportType', "Report Type:", choices=c("webAccess", "downloads"), 
                      selected="downloads"),
          sliderInput("months", "Months", min=1, max=12, value=2, step=1),
          actionButton('report', "Make Report")
