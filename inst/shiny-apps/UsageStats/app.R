@@ -69,13 +69,16 @@ server <- shinyServer(function(input, output) {
   myVals <- reactiveValues()
 
   teamACL <- eventReactive(input$lookup, {
-    acl <- aclToUserList(paste0("syn", input$projectId))
+    acl <- synGetEntityACL(paste0("syn", input$projectId))
+    aclToMemberList(acl) %>% 
+      filter(userName != "PUBLIC", !isIndividual)
   })
   
   output$teamList <- renderUI({
     withProgress(message = 'Looking up team...', value = 0, {
       teamList <- teamACL()
-      teamIds <- unique(as.character(teamList$teamId))
+      teamIds <- c(paste0("syn", input$projectId), 
+                   unique(as.character(teamList$ownerId)))
     })
     selectInput("teamOrder", "Team Order", choices=teamIds, 
                 selected=NULL, width='100%', multiple = TRUE, selectize = TRUE)
