@@ -18,15 +18,21 @@ getTeamMemberDF <- function(teamId) {
   userList
 }
 
-aclToUserList <- function(id) {
-  acl <- synGetEntityACL(id)
+aclToUserList <- function(synId) {
+  acl <- synGetEntityACL(synId)
   
-  aclUserList <- ldply(acl@resourceAccess@content, 
+  aclMemberList <- ldply(acl@resourceAccess@content, 
                        function(x) data.frame(principalId=as.character(x@principalId),
-                                              teamId="syn2862345"))
+                                              teamId=synId))
   
+  userGroupHeaders <- synRestGET(sprintf("/userGroupHeaders/batch?ids=%s", 
+                                         paste(aclMemberList$principalId, 
+                                               collapse=",")))
   
-  userList <- ldply(aclUserList$principalId, getTeamMemberDF)
+  userGroupHeadersDf <- ldply(userGroupHeaders$children, as.data.frame)
+  
+  groupsOnlyDf <- userGroupHeadersDf %>% filter(!isIndividual)
+  userList <- ldply(groupsOnlyDf$ownerId, getTeamMemberDF)
   
   userList2 <- aclUserList %>% 
     filter(!(principalId %in% userList$userId)) %>% 
