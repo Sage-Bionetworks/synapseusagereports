@@ -139,7 +139,10 @@ levels(allUsers$teamId) <- c(levels(allUsers$teamId), "None")
 allUsers$teamId[is.na(allUsers$teamId)] <- "None"
 
 allUsers$group <- "Other"
-teamInfo <- ddply(allUsers %>% filter(teamId != "None") %>% select(teamId) %>% unique(),
+allUsers$teamName <- "None"
+
+teamInfo <- ddply(allUsers %>% filter(teamId != "None") %>%
+                    select(teamId) %>% unique(),
                   .(teamId),
                   function(x) {
                     tmp <- synRestGET(sprintf("/team/%s", x$teamId)); 
