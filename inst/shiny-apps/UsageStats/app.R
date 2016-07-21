@@ -10,6 +10,9 @@
 library(shiny)
 library(rmarkdown)
 library(synapseClient)
+source("../../../inst/lib.R")
+library(plyr)
+library(dplyr)
 
 synapseLogin()
 
