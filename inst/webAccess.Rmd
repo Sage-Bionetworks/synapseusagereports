@@ -141,7 +141,10 @@ allUsers$teamId[is.na(allUsers$teamId)] <- "None"
 allUsers$group <- "Other"
 allUsers$teamName <- "None"
 
-teamInfo <- ddply(allUsers %>% filter(teamId != "None") %>%
+
+teamInfo <- ddply(allUsers %>% filter(teamId != "None",
+                                      !startsWith(as.character(allUsers$teamId), 
+                                                 "syn")) %>%
                     select(teamId) %>% unique(),
                   .(teamId),
                   function(x) {
