@@ -6,6 +6,7 @@ Generate HTML usage reports for Synapse projects.
 
 1. R >= 3.3.0
 1. RStudio
+1. [rSynapseClient](https://www.github.com/Sage-Bionetworks/rSynapseClient)
 
 ## Installation
 
@@ -20,5 +21,7 @@ install.packages("shiny", "rmarkdown", "plyr", "dplyr", "reshape", "data.table",
 Set your working directory to the root of the project and run the Shiny app at `inst/shiny-apps/UsageStats/app.R`:
 
 ```
-shiny::runApp('inst/shiny-apps/UsageStats/')
+shiny::runApp('inst/shiny-apps/UsageStats/', launch.browser=TRUE)
 ```
+
+Select "launch in browser" either from the running app
