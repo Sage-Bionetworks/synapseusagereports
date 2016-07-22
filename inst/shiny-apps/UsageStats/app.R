@@ -69,7 +69,12 @@ server <- shinyServer(function(input, output) {
   myVals <- reactiveValues()
 
   teamACL <- eventReactive(input$lookup, {
-    acl <- synGetEntityACL(paste0("syn", input$projectId))
+    validate(
+      need(try(checkForProject(isolate(input$projectId))), 
+           "That project doesn't exist. Please try again.")
+    )
+    
+    acl <- synGetEntityACL(input$projectId)
     aclToMemberList(acl) %>% 
       filter(userName != "PUBLIC", !isIndividual)
   })
@@ -77,7 +82,7 @@ server <- shinyServer(function(input, output) {
   output$teamList <- renderUI({
     withProgress(message = 'Looking up team...', value = 0, {
       teamList <- teamACL()
-      teamIds <- c(paste0("syn", input$projectId), 
+      teamIds <- c(input$projectId, 
                    unique(as.character(teamList$ownerId)))
     })
     selectInput("teamOrder", "Team Order", choices=teamIds, 
