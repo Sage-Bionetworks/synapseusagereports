@@ -19,15 +19,25 @@ synapseLogin()
 checkForProject <- function(projectId) {
   length(synQuery(sprintf('select id from project where projectId=="syn%s" LIMIT 1', projectId))) == 1
 }
-renderMyDocument <- function(reportType, projectId, nMonths, aclTeamOrder, outputFile) {
+renderMyDocument <- function(reportType, projectId, nMonths, aclTeamOrder, useTeamGrouping, outputFile) {
     res <- rmarkdown::render(input=paste0("../../", reportType, ".Rmd"),
                       output_file=outputFile,
-                      params = list(projectId=projectId, nMonths=nMonths, aclTeamOrder=aclTeamOrder))
+                      params = list(projectId=projectId, nMonths=nMonths, 
+                                    aclTeamOrder=aclTeamOrder, 
+                                    useTeamGrouping=useTeamGrouping))
 }
 
 # Define UI for application that draws a histogram
 ui <- shinyUI(fluidPage(
    
+  tags$head(
+    tags$style(HTML("
+      .shiny-output-error-validation {
+        color: red;
+      }
+    "))
+  ),
+  
    # Application title
    titlePanel("Synapse Project Usage"),
    
@@ -40,6 +50,7 @@ ui <- shinyUI(fluidPage(
          uiOutput('teamList'),
          selectInput('reportType', "Report Type:", choices=c("webAccess", "downloads"), 
                      selected="downloads"),
+         checkboxInput('useTeamGrouping', 'Group by teams', value=FALSE),
          sliderInput("months", "Months", min=1, max=12, value=2, step=1),
          actionButton('report', "Make Report")
       ),
@@ -58,6 +69,7 @@ ui <- shinyUI(fluidPage(
         p("Then, click the 'Make Report' button, A 'Download' button will appear when the report has been generated."),
         br(),
         p("A PDF of this report can be generated in most browsers by printing the HTML to a PDF file."),
+        hr(),
         uiOutput("results")
       )
    )
@@ -69,13 +81,21 @@ server <- shinyServer(function(input, output) {
   myVals <- reactiveValues()
 
   teamACL <- eventReactive(input$lookup, {
-    acl <- aclToUserList(paste0("syn", input$projectId))
+    validate(
+      need(try(checkForProject(isolate(input$projectId))), 
+           "That project doesn't exist. Please try again.")
+    )
+    
+    acl <- synGetEntityACL(paste0("syn", input$projectId))
+    aclToMemberList(acl) %>% 
+      filter(userName != "PUBLIC", !isIndividual)
   })
   
   output$teamList <- renderUI({
     withProgress(message = 'Looking up team...', value = 0, {
       teamList <- teamACL()
-      teamIds <- unique(as.character(teamList$teamId))
+      teamIds <- c(paste0("syn", input$projectId), 
+                   unique(as.character(teamList$ownerId)))
     })
     selectInput("teamOrder", "Team Order", choices=teamIds, 
                 selected=NULL, width='100%', multiple = TRUE, selectize = TRUE)
@@ -84,18 +104,26 @@ server <- shinyServer(function(input, output) {
   res <- eventReactive(input$report, {
     print("Making Report")
     withProgress(message = 'Making report', value = 0, {
-    
-    validate(
+      
+      validate(
         need(try(checkForProject(input$projectId)), 
              "That project doesn't exist. Please try again.")
-    )
-    
+      )
+      
+      if (input$useTeamGrouping) {
+        validate(
+          need(try(input$teamOrder != ""), 
+               "Please select a Team ordering before generating a report.")
+        )
+      }
+      
     myVals[['reportName']] <- 'myreport.html'
     
     renderMyDocument(reportType=input$reportType, 
                      projectId = input$projectId,
                      nMonths=input$months,
                      aclTeamOrder = input$teamOrder,
+                     useTeamGrouping=input$useTeamGrouping,
                      #outputFile=paste0(as.numeric(as.POSIXct(Sys.Date())), "_", reportType, ".html"),
                      outputFile='myreport.html')
     })
@@ -117,7 +145,7 @@ server <- shinyServer(function(input, output) {
 
    output$results <- renderUI({
      report <- res()
-     downloadButton('download')
+     list(h3("Results"), downloadButton('download'))
    })
 })
 
