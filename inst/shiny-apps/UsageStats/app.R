@@ -17,7 +17,7 @@ library(dplyr)
 synapseLogin()
 
 checkForProject <- function(projectId) {
-  length(synQuery(sprintf('select id from project where projectId=="syn%s" LIMIT 1', projectId))) == 1
+  length(synQuery(sprintf('select id from project where projectId=="%s" LIMIT 1', projectId))) == 1
 }
 renderMyDocument <- function(reportType, projectId, nMonths, aclTeamOrder, outputFile) {
     res <- rmarkdown::render(input=paste0("../../", reportType, ".Rmd"),
