@@ -108,18 +108,19 @@ queryData <- res %>%
 ### Web access usage statistics from `r min(monthBreaksDf$beginTime)` to `r max(monthBreaksDf$endTime)`.
 
 ```{r users}
-# Get users at project level
-aclUserList <- aclToUserList(paste0("syn", projectId))
-aclUserList$teamId <- factor(aclUserList$teamId, 
-                             levels=aclTeamOrder,
-                             ordered=TRUE)
-
-aclUserList <- aclUserList %>%
-  group_by(userId) %>% 
-  arrange(teamId) %>% 
-  slice(1) %>% 
-  ungroup()
-
+if (useTeamGrouping) {
+  # Get users at project level
+  aclUserList <- aclToUserList(paste0("syn", projectId))
+  aclUserList$teamId <- factor(aclUserList$teamId, 
+                               levels=aclTeamOrder,
+                               ordered=TRUE)
+  
+  aclUserList <- aclUserList %>%
+    group_by(userId) %>% 
+    arrange(teamId) %>% 
+    slice(1) %>% 
+    ungroup()
+}
 ```
 
 ```{r summaryuseraccess}
@@ -132,29 +133,38 @@ allUsersList <- ldply(accessUsers$children, as.data.frame) %>%
   mutate(userId=ownerId) %>% 
   select(userId, userName)
 
-allUsers <- left_join(allUsersList, aclUserList)
+if (useTeamGrouping) {
+  allUsers <- left_join(allUsersList, aclUserList)
+} else{
+  allUsers <- allUsersList
+  allUsers$teamId <- "None"
+}
+
 levels(allUsers$teamId) <- c(levels(allUsers$teamId), "None") 
 allUsers$teamId[is.na(allUsers$teamId)] <- "None"
 
 allUsers$group <- "Other"
 allUsers$teamName <- "None"
 
-
-teamInfo <- ddply(allUsers %>% filter(teamId != "None",
-                                      !startsWith(as.character(allUsers$teamId), 
-                                                 "syn")) %>%
-                    select(teamId) %>% unique(),
-                  .(teamId),
-                  function(x) {
-                    tmp <- synRestGET(sprintf("/team/%s", x$teamId)); 
-                    data.frame(teamId=x$teamId, teamName=tmp$name)
+if (useTeamGrouping) {
+  teamInfo <- ddply(allUsers %>% 
+                      filter(teamId != "None",
+                             !startsWith(as.character(allUsers$teamId), 
+                                         "syn")) %>%
+                      select(teamId) %>% unique(),
+                    .(teamId),
+                    function(x) {
+                      tmp <- synRestGET(sprintf("/team/%s", x$teamId)); 
+                      data.frame(teamId=x$teamId, teamName=tmp$name)
                     }
-                  )
-
-
-allUsers <- left_join(allUsers, teamInfo, by="teamId")
+  )
+  
+  allUsers <- left_join(allUsers, teamInfo, by="teamId")
+}
 levels(allUsers$teamName) <- c(levels(allUsers$teamName), "None") 
 allUsers$teamName[is.na(allUsers$teamName)] <- "None"
+
+
 ```
 
 ```{r userJoin}
