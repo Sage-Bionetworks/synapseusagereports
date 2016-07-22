@@ -3,10 +3,10 @@ output:
   html_document: 
     keep_md: yes
 params:
-  projectId: !r NA
-  nMonths: 2
-  useTeamGrouping: TRUE
-  aclTeamOrder: !r NA
+  projectId: !r c('2289125')
+  nMonths: 5
+  useTeamGrouping: FALSE
+  aclTeamOrder: !r c('syn2289125')
 ---
 
 ```{r include=FALSE, eval=FALSE, echo=FALSE}
@@ -120,19 +120,17 @@ aclUserList <- aclUserList %>%
   slice(1) %>% 
   ungroup()
 
-# # Get sage employees
-# sageUserList <- getTeamMemberDF(273957)
-# userList <- rbind(userList, sageUserList)
-
 ```
 
 ```{r summaryuseraccess}
 # Get user profile info for users in data download records
-allUsersList <- ldply(unique(queryData$userid),
-                      function(x) {
-                        foo <- synGetUserProfile(x); 
-                        data.frame(userId=as.character(x),
-                                   userName=foo@userName)})
+accessUsers <- synRestGET(sprintf("/userGroupHeaders/batch?ids=%s", 
+                                  paste(unique(queryData$userId), 
+                                               collapse=",")))
+
+allUsersList <- ldply(accessUsers$children, as.data.frame) %>% 
+  mutate(userId=ownerId) %>% 
+  select(userId, userName)
 
 allUsers <- left_join(allUsersList, aclUserList)
 levels(allUsers$teamId) <- c(levels(allUsers$teamId), "None") 
@@ -234,8 +232,8 @@ useraccessCount <- queryData %>%
          userId=reorder(userId, n, order=TRUE))
 ```
 
+```{r plotperdayperuser, fig.width=20, fig.height=6, include=FALSE, eval=FALSE}
 #### Accesses per day per user
-```{r plotperdayperuser, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 
 if (useTeamGrouping) {
 plotdata <- queryData %>%
