@@ -3,10 +3,10 @@ output:
   html_document: 
     keep_md: yes
 params:
-  projectId: !r NA
+  projectId: !r 'syn1773109'
   nMonths: 2
   useTeamGrouping: TRUE
-  aclTeamOrder: !r NA
+  aclTeamOrder: !r c("2224090", "3319054", "syn1773109", "273957")
 ---
 
 ```{r include=FALSE, eval=FALSE, echo=FALSE}
@@ -144,7 +144,7 @@ levels(allUsers$teamId) <- c(levels(allUsers$teamId), "None")
 allUsers$teamId[is.na(allUsers$teamId)] <- "None"
 
 allUsers$group <- "Other"
-allUsers$teamName <- "None"
+# allUsers$teamName <- "None"
 
 teamInfo <- ddply(allUsers %>% 
                     filter(teamId != "None",
