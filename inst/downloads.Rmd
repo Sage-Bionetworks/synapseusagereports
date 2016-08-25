@@ -144,22 +144,27 @@ levels(allUsers$teamId) <- c(levels(allUsers$teamId), "None")
 allUsers$teamId[is.na(allUsers$teamId)] <- "None"
 
 allUsers$group <- "Other"
-# allUsers$teamName <- "None"
 
-teamInfo <- ddply(allUsers %>% 
-                    filter(teamId != "None",
-                           !startsWith(as.character(allUsers$teamId), 
-                                       "syn")) %>% 
-                    select(teamId) %>% unique(),
-                  .(teamId),
-                  function(x) {
-                    tmp <- synRestGET(sprintf("/team/%s", x$teamId)); 
-                    data.frame(teamId=x$teamId, teamName=tmp$name)
+if (useTeamGrouping) {
+  
+  teamInfo <- ddply(allUsers %>% 
+                      filter(teamId != "None",
+                             !startsWith(as.character(allUsers$teamId), 
+                                         "syn")) %>% 
+                      select(teamId) %>% unique(),
+                    .(teamId),
+                    function(x) {
+                      tmp <- synRestGET(sprintf("/team/%s", x$teamId)); 
+                      data.frame(teamId=x$teamId, teamName=tmp$name)
                     }
-                  )
+  )
+  
+  
+  allUsers <- left_join(allUsers, teamInfo, by="teamId")
+} else {
+  allUsers$teamName <- "None"
+}
 
-
-allUsers <- left_join(allUsers, teamInfo, by="teamId")
 levels(allUsers$teamName) <- c(levels(allUsers$teamName), "None") 
 allUsers$teamName[is.na(allUsers$teamName)] <- "None"
 ```
