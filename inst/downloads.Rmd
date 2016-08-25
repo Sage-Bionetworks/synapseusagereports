@@ -104,7 +104,7 @@ queryData <- res %>%
          dateGrouping=floor_date(date, unit="month"))
 
 ```
-### Web access usage statistics from `r min(monthBreaksDf$beginTime)` to `r max(monthBreaksDf$endTime)`.
+### Downloads usage statistics from `r min(monthBreaksDf$beginTime)` to `r max(monthBreaksDf$endTime)`.
 
 ```{r users}
 if (useTeamGrouping) {
