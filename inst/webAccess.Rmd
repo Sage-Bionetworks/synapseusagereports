@@ -144,7 +144,7 @@ levels(allUsers$teamId) <- c(levels(allUsers$teamId), "None")
 allUsers$teamId[is.na(allUsers$teamId)] <- "None"
 
 allUsers$group <- "Other"
-allUsers$teamName <- "None"
+# allUsers$teamName <- "None"
 
 if (useTeamGrouping) {
   teamInfo <- ddply(allUsers %>% 
@@ -160,7 +160,10 @@ if (useTeamGrouping) {
   )
   
   allUsers <- left_join(allUsers, teamInfo, by="teamId")
+} else {
+  allUsers$teamName <- "None"
 }
+
 levels(allUsers$teamName) <- c(levels(allUsers$teamName), "None") 
 allUsers$teamName[is.na(allUsers$teamName)] <- "None"
 
