@@ -45,13 +45,15 @@ ui <- shinyUI(fluidPage(
    sidebarLayout(
       sidebarPanel(
          textInput("projectId",
-                     "Project ID:"),
+                     "Project ID"),
+         checkboxInput('useTeamGrouping', 'Group by teams', value=FALSE),
          actionButton('lookup', "Lookup Project"),
          uiOutput('teamList'),
-         selectInput('reportType', "Report Type:", choices=c("webAccess", "downloads"), 
+         hr(),
+         selectInput('reportType', "Report Type", choices=c("webAccess", "downloads"), 
                      selected="downloads"),
-         checkboxInput('useTeamGrouping', 'Group by teams', value=FALSE),
          sliderInput("months", "Months", min=1, max=12, value=2, step=1),
+         hr(),
          actionButton('report', "Make Report")
       ),
       
@@ -59,11 +61,11 @@ ui <- shinyUI(fluidPage(
       mainPanel(
         p("This page will generate usage statistics reports (in HTML format) for a Synapse Project."),
         br(),
-        p("Type in a Synapse project ID", 
-          strong("(without the 'syn' prefix)"), 
-          ", and click the 'Lookup Project' button.",
-          'This will find the Teams on the ACL in this project.',
-          'Select the Teams in order of precedence.'), 
+        p("Type in a Synapse project ID and click the 'Lookup Project' button.",
+          'This will find the Teams on the ACL in this project.'),
+        br(),
+        p('Select the Teams in order of precedence (so users who are on multiple teams will not be counted extra). This is only used if the "Group by teams" box is checked.'), 
+        br(),
         p('Next, select the type of report and number of months to query.'),
         br(),
         p("Then, click the 'Make Report' button, A 'Download' button will appear when the report has been generated."),
@@ -95,10 +97,17 @@ server <- shinyServer(function(input, output) {
     withProgress(message = 'Looking up team...', value = 0, {
       teamList <- teamACL()
       teamIds <- c(input$projectId, 
-                   unique(as.character(teamList$ownerId)))
+                   as.character(teamList$ownerId))
+      names(teamIds) <- c("Project ACL Users", as.character(teamList$userName))
     })
-    selectInput("teamOrder", "Team Order", choices=teamIds, 
+    
+    if (input$useTeamGrouping) {
+      selectInput("teamOrder", "Team Order", choices=teamIds, 
                 selected=NULL, width='100%', multiple = TRUE, selectize = TRUE)
+    }
+    else {
+      list()
+    }
   })
   
   res <- eventReactive(input$report, {
@@ -118,7 +127,7 @@ server <- shinyServer(function(input, output) {
       }
       
     myVals[['reportName']] <- 'myreport.html'
-    
+    print(input$teamOrder)
     renderMyDocument(reportType=input$reportType, 
                      projectId = input$projectId,
                      nMonths=input$months,
