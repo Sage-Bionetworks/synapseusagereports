@@ -3,10 +3,10 @@ output:
   html_document: 
     keep_md: yes
 params:
-  projectId: !r c('2289125')
-  nMonths: 5
+  projectId: !r 'syn4921369'
+  nMonths: 6
   useTeamGrouping: FALSE
-  aclTeamOrder: !r c('syn2289125')
+  aclTeamOrder: !r c("3319054", "2224090", "syn1773109", "273957")
 ---
 
 ```{r include=FALSE, eval=FALSE, echo=FALSE}
@@ -30,6 +30,7 @@ library(synapseClient)
 library(RMySQL)
 library(yaml)
 library(lubridate)
+library(forcats)
 
 source("lib.R")
 
@@ -102,7 +103,13 @@ res <- ddply(timestampBreaksDf, .(beginTime, endTime),
 queryData <- res %>%
   mutate(date=as.Date(as.character(DATE)),
          userId=as.character(userid), 
-         dateGrouping=floor_date(date, unit="month"))
+         dateGrouping=floor_date(date, unit="month"),
+         monthYear=paste(lubridate::month(dateGrouping, label=TRUE),
+                         lubridate::year(dateGrouping)))
+
+# Get unique due to folder, file name changes
+# Might not be most recent name!
+queryData <- queryData %>% group_by(id, userid, TIMESTAMP) %>% slice(1) %>% ungroup()
 
 ```
 ### Web access usage statistics from `r min(monthBreaksDf$beginTime)` to `r max(monthBreaksDf$endTime)`.
@@ -140,15 +147,14 @@ if (useTeamGrouping) {
   allUsers$teamId <- "None"
 }
 
-levels(allUsers$teamId) <- c(levels(allUsers$teamId), "None") 
+allUsers$teamId <- fct_expand(allUsers$teamId, "Anonymous", "None")
 allUsers$teamId[is.na(allUsers$teamId)] <- "None"
-
-allUsers$group <- "Other"
+allUsers$teamId[allUsers$userId == "273950"] <- "Anonymous"
 # allUsers$teamName <- "None"
 
 if (useTeamGrouping) {
   teamInfo <- ddply(allUsers %>% 
-                      filter(teamId != "None",
+                      filter(teamId != "None", teamId != "Anonymous",
                              !startsWith(as.character(allUsers$teamId), 
                                          "syn")) %>%
                       select(teamId) %>% unique(),
@@ -158,14 +164,22 @@ if (useTeamGrouping) {
                       data.frame(teamId=x$teamId, teamName=tmp$name)
                     }
   )
-  
+  if (nrow(teamInfo) > 0) {
   allUsers <- left_join(allUsers, teamInfo, by="teamId")
+  } else {
+    allUsers$teamName <- "None"
+  }
 } else {
   allUsers$teamName <- "None"
 }
 
-levels(allUsers$teamName) <- c(levels(allUsers$teamName), "None") 
-allUsers$teamName[is.na(allUsers$teamName)] <- "None"
+allUsers$teamName <- fct_expand(factor(allUsers$teamName), "None")
+naTeamNames <- is.na(allUsers$teamName)
+
+allUsers$teamName <- fct_expand(allUsers$teamName,
+                                as.character(allUsers$teamId[naTeamNames]))
+
+allUsers$teamName[naTeamNames] <- allUsers$teamId[naTeamNames]
 
 
 ```
@@ -175,12 +189,31 @@ queryData <- queryData %>%
   left_join(., allUsers)
 ```
 
+#### Total Users
+There are `r length(setdiff(unique(queryData$userName), c("anonymous")))` active users in this time period.
+
+#### Returning Users
+
+New Users (per Month, starting from first month in the range):
+
+```{r}
+firstMonthToVisit(queryData) %>% kable
+```
+
+`r multiMonthVisits(queryData) %>% nrow` users have viewed a page in at least two different months.
+
+```{r}
+uniqueUsersPerMonth(queryData) %>% 
+  #mutate(Date=paste(month(Date, label=TRUE), year(Date))) %>%
+  kable
+```
+
 #### Website access per month
 ```{r loadpermonth, include=TRUE, eval=TRUE}
 if (useTeamGrouping) {
   dateGroupingCount <- queryData %>%
     count(teamName, dateGrouping) %>% 
-    reshape2::dcast(teamName ~ dateGrouping)
+    reshape2::dcast(teamName ~ dateGrouping, fun.aggregate = sum)
 } else {
   dateGroupingCount <- queryData %>%
     mutate(teamName='All') %>% 
@@ -320,5 +353,5 @@ dataaccessCount <- queryData %>%
   filter(n > 5, !str_detect(id, "acl")) %>%
   ungroup() %>% 
   arrange(desc(n))
-dataaccessCount %>% select(id, NAME, NODE_TYPE, n) %>% kable
+dataaccessCount %>% select(id, NAME, NODE_TYPE, n) %>% head(50) %>% kable
 ```
