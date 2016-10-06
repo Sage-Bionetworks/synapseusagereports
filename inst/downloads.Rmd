@@ -103,6 +103,10 @@ queryData <- res %>%
          userId=as.character(userid), 
          dateGrouping=floor_date(date, unit="month"))
 
+# Get unique due to folder, file name changes
+# Might not be most recent name!
+queryData <- queryData %>% group_by(id, userid, TIMESTAMP) %>% slice(1) %>% ungroup()
+
 ```
 ### Downloads usage statistics from `r min(monthBreaksDf$beginTime)` to `r max(monthBreaksDf$endTime)`.
 
