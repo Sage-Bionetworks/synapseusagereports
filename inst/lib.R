@@ -46,3 +46,44 @@ aclToUserList <- function(synId) {
   rbind(userList2[, c("userId", "teamId")], userList)
   
 }
+
+uniqueUsersPerMonth <- function(queryData) {
+  queryData %>%
+    select(userName, dateGrouping) %>% 
+    distinct() %>% 
+    filter(userName != "anonymous") %>% 
+    group_by(dateGrouping) %>% 
+    summarize(Users=n_distinct(userName)) %>% 
+    dplyr::rename(Date=dateGrouping)
+}
+
+firstMonthToVisit <- function(queryData) {
+  firstMonthVisit <- queryData %>%
+    filter(userName != "anonymous") %>% 
+    select(userName, dateGrouping) %>% 
+    distinct() %>% 
+    group_by(userName)  %>% 
+    arrange(dateGrouping) %>% 
+    slice(1) %>% ungroup() %>% 
+    mutate(visit=1) %>%
+    count(dateGrouping)
+  
+  missing <- unique(queryData$dateGrouping[!(queryData$dateGrouping %in% firstMonthVisit$dateGrouping)])
+  
+  if (length(missing) > 0) {
+    firstMonthVisit <- rbind(firstMonthVisit,
+                             data.frame(n=0, 
+                                        dateGrouping=missing))
+  }
+  
+  firstMonthVisit %>% 
+    arrange(dateGrouping) %>% 
+    dplyr::rename(Date=dateGrouping, `New Users`=n)
+}
+
+multiMonthVisits <- function(queryData) {
+  queryData %>%
+    group_by(userName) %>% 
+    summarize(monthsVisited=n_distinct(dateGrouping)) %>% 
+    filter(monthsVisited >= 2, userName != 'anonymous')
+}
