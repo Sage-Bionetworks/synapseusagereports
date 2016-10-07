@@ -104,17 +104,16 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
     allUsers$teamId <- "None"
   }
   
-  levels(allUsers$teamId) <- c(levels(allUsers$teamId), "None") 
+  allUsers$teamId <- fct_expand(allUsers$teamId, "Anonymous", "None")
   allUsers$teamId[is.na(allUsers$teamId)] <- "None"
-  
-  allUsers$group <- "Other"
+  allUsers$teamId[allUsers$userId == "273950"] <- "Anonymous"
   
   if (useTeamGrouping) {
     
     teamInfo <- ddply(allUsers %>% 
-                        filter(teamId != "None",
+                        filter(teamId != "None", teamId != "Anonymous",
                                !startsWith(as.character(allUsers$teamId), 
-                                           "syn")) %>% 
+                                           "syn")) %>%
                         select(teamId) %>% unique(),
                       .(teamId),
                       function(x) {
