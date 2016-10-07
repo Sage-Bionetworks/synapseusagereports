@@ -49,15 +49,6 @@ mytheme <- theme_bw() + theme(axis.text=element_text(size=16),
                               axis.title.x=element_text(size=18),
                               axis.title.y=element_text(size=18, angle=90))
 
-# Full header of table
-header <- c("returnobjectid", "elapsems", "timestamp", "via", "host", "threadid", 
-            "useragent", "querystring", "sessionid", "xforwardedfor", "requesturl", 
-            "userid", "origin", "date", "method", "vmid", "instance", "stack",
-            "success", "responsestatus")
-
-# Columns we're interested in
-keepcols <- c(1, 3, 7, 11, 12, 14, 18, 19)
-
 ```
 ```{r config}
 config <- yaml.load_file("mysql_config.yml")
