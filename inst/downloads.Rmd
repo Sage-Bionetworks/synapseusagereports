@@ -73,13 +73,13 @@ queryData <- queryData %>% left_join(., allUsers)
 ```
 
 #### Website access per month
-```{r loadpermonth, include=TRUE, eval=TRUE}
+```{r loadpermonth}
 dateGroupingCount <- countByMonth(queryData, useTeamGrouping)
 dateGroupingCount %>% kable
 ```
 
 #### Website access per day
-```{r loadperday, include=TRUE, eval=TRUE}
+```{r loadperday}
 perdayCount <- countByDay(queryData, useTeamGrouping)
 ```
 
