@@ -150,6 +150,42 @@ countByMonth <- function(queryData, useTeamGrouping) {
   
 }
 
+countByDay <- function(queryData, useTeamGrouping) {
+  if (useTeamGrouping) {
+    perdayCount <- queryData %>%
+      count(teamName, date) %>% 
+      arrange(n)
+  } else { 
+    perdayCount <- queryData %>%
+      mutate(teamName="All") %>% 
+      count(teamName, date) %>% 
+      arrange(n)
+  }
+  
+}
+
+plotByDay <- function(perDayCount, useTeamGrouping) {
+  plotdata <- perdayCount %>% 
+    reshape2::dcast(date ~ teamName, value.var='n', fill=0) %>% 
+    reshape::melt(., id.vars=c("date"), 
+                  variable.name="teamName", value.name="n") %>% 
+    dplyr::rename(group=variable, n=value)
+  
+  p <- ggplot(plotdata, aes(x=date, y=n))
+  p <- p + geom_line(aes(group=group, color=group), size=1)
+  
+  if (useTeamGrouping) {
+    p <- p + scale_color_brewer(palette = "Set1")
+  } else {
+    p <- p + scale_color_manual(values="black")
+  }
+
+  p  <- p + mytheme + theme(axis.title.x=element_blank(),
+                            axis.text.x=element_text(size=16, angle=270),
+                            legend.position="top")
+  p
+  
+}
 uniqueUsersPerMonth <- function(queryData) {
   queryData %>%
     select(userName, dateGrouping) %>% 

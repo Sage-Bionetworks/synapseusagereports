@@ -80,47 +80,12 @@ dateGroupingCount %>% kable
 
 #### Website access per day
 ```{r loadperday, include=TRUE, eval=TRUE}
-### Daily usage
-# queryData <- queryData %>%
-#   mutate(date=as.Date(as.character(DATE)),
-#          userId=as.character(userid)) %>% 
-#   left_join(., allUsers)
-
-if (useTeamGrouping) {
-  perdayCount <- queryData %>%
-    count(teamName, date) %>% 
-    arrange(n)
-} else { 
-  perdayCount <- queryData %>%
-    mutate(teamName="All") %>% 
-    count(teamName, date) %>% 
-    arrange(n)
-}
+perdayCount <- countByDay(queryData, useTeamGrouping)
 ```
 
 ```{r plotperday, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 ### Per day usage, total
-
-plotdata <- perdayCount %>% 
-  reshape2::dcast(date ~ teamName, value.var='n', fill=0) %>% 
-  reshape::melt(., id.vars=c("date"), 
-                variable.name="teamName", value.name="n") %>% 
-  dplyr::rename(group=variable, n=value)
-
-p <- ggplot(plotdata, aes(x=date, y=n))
-p <- p + geom_line(aes(group=group, color=group), size=1)
-if (useTeamGrouping) {
-p <- p + scale_color_brewer(palette = "Set1")
-} else {
-  p <- p + scale_color_manual(values="black")
-}
-# p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
-#                       labels = date_format("%b-%Y"),
-#                       limits = c(as.Date(beginDate), as.Date(endDate)))
-p  <- p + mytheme + theme(axis.title.x=element_blank(),
-                          axis.text.x=element_text(size=16, angle=270),
-                          legend.position="top")
-p
+plotByDay(queryData, useTeamGrouping)
 ```
 ```{r include=TRUE, eval=TRUE}
 ### Users
@@ -130,45 +95,6 @@ useraccessCount <- queryData %>%
   arrange(n) %>%
   mutate(userName=reorder(userName, n, order=TRUE),
          userId=reorder(userId, n, order=TRUE))
-```
-
-```{r plotperdayperuser, fig.width=20, fig.height=6, include=FALSE, eval=FALSE}
-#### Accesses per day per user
-
-if (useTeamGrouping) {
-plotdata <- queryData %>%
-  group_by(teamName) %>% 
-  count(date, userName, userId, teamName) %>% 
-  ungroup()
-} else {
-plotdata <- queryData %>%
-  mutate(teamName="All")
-  group_by(teamName) %>% 
-  count(date, userName, userId, teamName) %>% 
-  ungroup()
-}
-
-p <- ggplot(plotdata, aes(x=date, y=n, color=teamName))
-p <- p + geom_point(size=3, position = position_jitter(w = 0, h = 0.1))
-
-if (useTeamGrouping) {
-  p <- p + scale_color_brewer(palette = "Set1")
-} else {
-  p <- p + scale_color_manual(values="black")
-}
-
-# p <- p + scale_x_date(breaks = "1 week", minor_breaks = "1 day",
-#                       # labels = date_format("%b %Y"),
-#                       limits = c(as.Date(beginDate), as.Date(endDate)))
-p <- p + scale_y_log10()
-p  <- p + labs(y=expression(log[10]("access per user")), x="Day")
-# p <- p + facet_grid(group ~ .)
-p  <- p + mytheme + theme(axis.title.x=element_text(size=16),
-                          axis.text.x=element_text(size=16, angle=270),
-                          strip.text.y=element_text(size=20, angle=270),
-                          legend.position="top")
-p
-
 ```
 
 #### Total accesses per user
