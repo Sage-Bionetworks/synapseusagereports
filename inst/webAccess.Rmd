@@ -60,71 +60,16 @@ queryData <- getData(con=con, qTemplate=qTemplate, projectId=projectId,
 
 ```{r users}
 if (useTeamGrouping) {
-  # Get users at project level
-  aclUserList <- aclToUserList(paste0("syn", projectId))
-  aclUserList$teamId <- factor(aclUserList$teamId, 
-                               levels=aclTeamOrder,
-                               ordered=TRUE)
-  
-  aclUserList <- aclUserList %>%
-    group_by(userId) %>% 
-    arrange(teamId) %>% 
-    slice(1) %>% 
-    ungroup()
+  aclUserList <- processAclUserList(projectId, aclTeamOrder)
+} else {
+  aclUserList <- NULL
 }
 ```
 
 ```{r summaryuseraccess}
 # Get user profile info for users in data download records
-accessUsers <- synRestGET(sprintf("/userGroupHeaders/batch?ids=%s", 
-                                  paste(unique(queryData$userId), 
-                                               collapse=",")))
 
-allUsersList <- ldply(accessUsers$children, as.data.frame) %>% 
-  mutate(userId=ownerId) %>% 
-  select(userId, userName)
-
-if (useTeamGrouping) {
-  allUsers <- left_join(allUsersList, aclUserList)
-} else{
-  allUsers <- allUsersList
-  allUsers$teamId <- "None"
-}
-
-allUsers$teamId <- fct_expand(allUsers$teamId, "Anonymous", "None")
-allUsers$teamId[is.na(allUsers$teamId)] <- "None"
-allUsers$teamId[allUsers$userId == "273950"] <- "Anonymous"
-# allUsers$teamName <- "None"
-
-if (useTeamGrouping) {
-  teamInfo <- ddply(allUsers %>% 
-                      filter(teamId != "None", teamId != "Anonymous",
-                             !startsWith(as.character(allUsers$teamId), 
-                                         "syn")) %>%
-                      select(teamId) %>% unique(),
-                    .(teamId),
-                    function(x) {
-                      tmp <- synRestGET(sprintf("/team/%s", x$teamId)); 
-                      data.frame(teamId=x$teamId, teamName=tmp$name)
-                    }
-  )
-  if (nrow(teamInfo) > 0) {
-  allUsers <- left_join(allUsers, teamInfo, by="teamId")
-  } else {
-    allUsers$teamName <- "None"
-  }
-} else {
-  allUsers$teamName <- "None"
-}
-
-allUsers$teamName <- fct_expand(factor(allUsers$teamName), "None")
-naTeamNames <- is.na(allUsers$teamName)
-
-allUsers$teamName <- fct_expand(allUsers$teamName,
-                                as.character(allUsers$teamId[naTeamNames]))
-
-allUsers$teamName[naTeamNames] <- allUsers$teamId[naTeamNames]
-
+allUsers <- getQueryUserProfiles(queryData, useTeamGrouping, aclUserList)
 
 ```
 
