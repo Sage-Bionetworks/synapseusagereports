@@ -109,7 +109,6 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
   allUsers$teamId[allUsers$userId == "273950"] <- "Anonymous"
   
   if (useTeamGrouping) {
-    
     teamInfo <- ddply(allUsers %>% 
                         filter(teamId != "None", teamId != "Anonymous",
                                !startsWith(as.character(allUsers$teamId), 
@@ -121,15 +120,22 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
                         data.frame(teamId=x$teamId, teamName=tmp$name)
                       }
     )
-    
-    
-    allUsers <- left_join(allUsers, teamInfo, by="teamId")
+    if (nrow(teamInfo) > 0) {
+      allUsers <- left_join(allUsers, teamInfo, by="teamId")
+    } else {
+      allUsers$teamName <- "None"
+    }
   } else {
     allUsers$teamName <- "None"
   }
   
-  levels(allUsers$teamName) <- c(levels(allUsers$teamName), "None") 
-  allUsers$teamName[is.na(allUsers$teamName)] <- "None"
+  allUsers$teamName <- fct_expand(factor(allUsers$teamName), "None")
+  naTeamNames <- is.na(allUsers$teamName)
+  
+  allUsers$teamName <- fct_expand(allUsers$teamName,
+                                  as.character(allUsers$teamId[naTeamNames]))
+  
+  allUsers$teamName[naTeamNames] <- allUsers$teamId[naTeamNames]
   
   allUsers
 }
