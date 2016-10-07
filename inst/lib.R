@@ -161,7 +161,7 @@ countByDay <- function(queryData, useTeamGrouping) {
       count(teamName, date) %>% 
       arrange(n)
   }
-  
+  perdayCount
 }
 
 plotByDay <- function(perDayCount, useTeamGrouping) {
