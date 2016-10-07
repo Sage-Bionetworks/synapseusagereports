@@ -9,13 +9,6 @@ params:
   aclTeamOrder: !r c("2224090", "3319054", "syn1773109", "273957")
 ---
 
-```{r include=FALSE, eval=FALSE, echo=FALSE}
-synapseClient::synapseLogin()
-knit2synapse::storeAndKnitToFileEntity("./webAccess.Rmd", 
-                                       parentId = "syn4892835", 
-                                       fileName = "Web Access")
-```
-
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
 library(plyr)
 library(dplyr)
