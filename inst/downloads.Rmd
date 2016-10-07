@@ -58,85 +58,23 @@ queryData <- getData(con=con, qTemplate=qTemplate, projectId=projectId,
 
 ```{r users}
 if (useTeamGrouping) {
-  
-  # Get users at project level
-  aclUserList <- aclToUserList(paste0("syn", projectId))
-  aclUserList$teamId <- factor(aclUserList$teamId, 
-                               levels=aclTeamOrder,
-                               ordered=TRUE)
-  
-  aclUserList <- aclUserList %>%
-    group_by(userId) %>% 
-    arrange(teamId) %>% 
-    slice(1) %>% 
-    ungroup()
-}  
+  aclUserList <- processAclUserList(projectId, aclTeamOrder)
+} else {
+  aclUserList <- NULL
+}
 ```
 
 ```{r summaryuseraccess}
-# Get user profile info for users in data download records
-accessUsers <- synRestGET(sprintf("/userGroupHeaders/batch?ids=%s", 
-                                  paste(unique(queryData$userId), 
-                                               collapse=",")))
-
-allUsersList <- ldply(accessUsers$children, as.data.frame) %>% 
-  mutate(userId=ownerId) %>% 
-  select(userId, userName)
-
-if (useTeamGrouping) {
-  allUsers <- left_join(allUsersList, aclUserList)
-} else{
-  allUsers <- allUsersList
-  allUsers$teamId <- "None"
-}
-
-levels(allUsers$teamId) <- c(levels(allUsers$teamId), "None") 
-allUsers$teamId[is.na(allUsers$teamId)] <- "None"
-
-allUsers$group <- "Other"
-
-if (useTeamGrouping) {
-  
-  teamInfo <- ddply(allUsers %>% 
-                      filter(teamId != "None",
-                             !startsWith(as.character(allUsers$teamId), 
-                                         "syn")) %>% 
-                      select(teamId) %>% unique(),
-                    .(teamId),
-                    function(x) {
-                      tmp <- synRestGET(sprintf("/team/%s", x$teamId)); 
-                      data.frame(teamId=x$teamId, teamName=tmp$name)
-                    }
-  )
-  
-  
-  allUsers <- left_join(allUsers, teamInfo, by="teamId")
-} else {
-  allUsers$teamName <- "None"
-}
-
-levels(allUsers$teamName) <- c(levels(allUsers$teamName), "None") 
-allUsers$teamName[is.na(allUsers$teamName)] <- "None"
+allUsers <- getQueryUserProfiles(queryData, useTeamGrouping, aclUserList)
 ```
 
 ```{r userJoin}
-queryData <- queryData %>%
-  left_join(., allUsers)
+queryData <- queryData %>% left_join(., allUsers)
 ```
 
 #### Website access per month
 ```{r loadpermonth, include=TRUE, eval=TRUE}
-if (useTeamGrouping) {
-  dateGroupingCount <- queryData %>%
-    count(teamName, dateGrouping) %>% 
-    reshape2::dcast(teamName ~ dateGrouping)
-} else {
-  dateGroupingCount <- queryData %>%
-    mutate(teamName='All') %>% 
-    count(teamName, dateGrouping) %>% 
-    reshape2::dcast(teamName ~ dateGrouping)
-}
-
+dateGroupingCount <- countByMonth(queryData, useTeamGrouping)
 dateGroupingCount %>% kable
 ```
 
