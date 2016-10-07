@@ -70,6 +70,23 @@ aclToUserList <- function(synId) {
   
 }
 
+processAclUserList <- function(projectId, aclTeamOrder) {
+  # Get users at project level and select the team
+  # they are on dependent on the ordering in aclTeamOrder
+  aclUserList <- aclToUserList(paste0("syn", projectId))
+  aclUserList$teamId <- factor(aclUserList$teamId, 
+                               levels=aclTeamOrder,
+                               ordered=TRUE)
+  
+  aclUserList <- aclUserList %>%
+    group_by(userId) %>% 
+    arrange(teamId) %>% 
+    slice(1) %>% 
+    ungroup()
+  
+  aclUserList
+}
+
 uniqueUsersPerMonth <- function(queryData) {
   queryData %>%
     select(userName, dateGrouping) %>% 
