@@ -59,23 +59,8 @@ qTemplate <- 'select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT
 ```
 
 ```{r domysqlquery}
-res <- ddply(timestampBreaksDf, .(beginTime, endTime),
-             function (x) doQuery(template=qTemplate, 
-                                  con=con,
-                                  projectId=projectId, 
-                                  beginTimestamp=x$beginTime, 
-                                  endTimestamp=x$endTime))
-
-queryData <- res %>%
-  mutate(date=as.Date(as.character(DATE)),
-         userId=as.character(userid), 
-         dateGrouping=floor_date(date, unit="month"),
-         monthYear=paste(lubridate::month(dateGrouping, label=TRUE),
-                         lubridate::year(dateGrouping)))
-
-# Get unique due to folder, file name changes
-# Might not be most recent name!
-queryData <- queryData %>% group_by(id, userid, TIMESTAMP) %>% slice(1) %>% ungroup()
+queryData <- getData(con=con, qTemplate=qTemplate, projectId=projectId,
+                     timestampBreaksDf=timestampBreaksDf)
 
 ```
 ### Web access usage statistics from `r min(monthBreaksDf$beginTime)` to `r max(monthBreaksDf$endTime)`.
