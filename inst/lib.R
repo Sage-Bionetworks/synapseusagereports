@@ -87,6 +87,54 @@ processAclUserList <- function(projectId, aclTeamOrder) {
   aclUserList
 }
 
+getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
+  # Get user profile info for users in data download records
+  accessUsers <- synRestGET(sprintf("/userGroupHeaders/batch?ids=%s", 
+                                    paste(unique(queryData$userId), 
+                                          collapse=",")))
+  
+  allUsersList <- ldply(accessUsers$children, as.data.frame) %>% 
+    mutate(userId=ownerId) %>% 
+    select(userId, userName)
+  
+  if (useTeamGrouping) {
+    allUsers <- left_join(allUsersList, aclUserList)
+  } else{
+    allUsers <- allUsersList
+    allUsers$teamId <- "None"
+  }
+  
+  levels(allUsers$teamId) <- c(levels(allUsers$teamId), "None") 
+  allUsers$teamId[is.na(allUsers$teamId)] <- "None"
+  
+  allUsers$group <- "Other"
+  
+  if (useTeamGrouping) {
+    
+    teamInfo <- ddply(allUsers %>% 
+                        filter(teamId != "None",
+                               !startsWith(as.character(allUsers$teamId), 
+                                           "syn")) %>% 
+                        select(teamId) %>% unique(),
+                      .(teamId),
+                      function(x) {
+                        tmp <- synRestGET(sprintf("/team/%s", x$teamId)); 
+                        data.frame(teamId=x$teamId, teamName=tmp$name)
+                      }
+    )
+    
+    
+    allUsers <- left_join(allUsers, teamInfo, by="teamId")
+  } else {
+    allUsers$teamName <- "None"
+  }
+  
+  levels(allUsers$teamName) <- c(levels(allUsers$teamName), "None") 
+  allUsers$teamName[is.na(allUsers$teamName)] <- "None"
+  
+  allUsers
+}
+
 uniqueUsersPerMonth <- function(queryData) {
   queryData %>%
     select(userName, dateGrouping) %>% 
