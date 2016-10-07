@@ -135,6 +135,21 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
   allUsers
 }
 
+countByMonth <- function(queryData, useTeamGrouping) {
+  if (useTeamGrouping) {
+    dateGroupingCount <- queryData %>%
+      count(teamName, dateGrouping) %>% 
+      reshape2::dcast(teamName ~ dateGrouping)
+  } else {
+    dateGroupingCount <- queryData %>%
+      mutate(teamName='All') %>% 
+      count(teamName, dateGrouping) %>% 
+      reshape2::dcast(teamName ~ dateGrouping)
+  }
+  
+  
+}
+
 uniqueUsersPerMonth <- function(queryData) {
   queryData %>%
     select(userName, dateGrouping) %>% 
