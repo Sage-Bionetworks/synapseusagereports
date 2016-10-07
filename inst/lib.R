@@ -10,6 +10,29 @@ doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
   
 }
 
+getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
+  
+  res <- ddply(timestampBreaksDf, .(beginTime, endTime),
+               function (x) doQuery(con=con,
+                                    template=qTemplate, 
+                                    projectId=projectId, 
+                                    beginTimestamp=x$beginTime, 
+                                    endTimestamp=x$endTime))
+  
+  queryData <- res %>%
+    mutate(date=as.Date(as.character(DATE)),
+           userId=as.character(userid), 
+           dateGrouping=floor_date(date, unit="month"),
+           monthYear=paste(lubridate::month(dateGrouping, label=TRUE),
+                           lubridate::year(dateGrouping)))
+  
+  # Get unique due to folder, file name changes
+  # Might not be most recent name!
+  queryData <- queryData %>% group_by(id, userid, TIMESTAMP) %>% slice(1) %>% ungroup()
+  
+  queryData
+}
+
 getTeamMemberDF <- function(teamId) {
   userListREST <- synRestGET(sprintf("/teamMembers/%s?limit=500", teamId))
   userList <- ldply(userListREST$results,
