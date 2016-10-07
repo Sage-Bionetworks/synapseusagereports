@@ -4,9 +4,9 @@ output:
     keep_md: yes
 params:
   projectId: !r 'syn1773109'
-  nMonths: 2
+  nMonths: 6
   useTeamGrouping: TRUE
-  aclTeamOrder: !r c("2224090", "3319054", "syn1773109", "273957")
+  aclTeamOrder: !r c("3319054", "2224090", "syn1773109", "273957")
 ---
 
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
@@ -72,13 +72,13 @@ allUsers <- getQueryUserProfiles(queryData, useTeamGrouping, aclUserList)
 queryData <- queryData %>% left_join(., allUsers)
 ```
 
-#### Website access per month
+#### Downloads per month
 ```{r loadpermonth}
 dateGroupingCount <- countByMonth(queryData, useTeamGrouping)
 dateGroupingCount %>% kable
 ```
 
-#### Website access per day
+#### Downloads per day
 ```{r loadperday}
 perdayCount <- countByDay(queryData, useTeamGrouping)
 ```
@@ -97,35 +97,19 @@ useraccessCount <- queryData %>%
          userId=reorder(userId, n, order=TRUE))
 ```
 
-#### Total accesses per user
-```{r fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
+#### Downloads per user (top 20 users)
+```{r peruser}
 plotdata <- queryData %>%
   count(userName) %>%
   # filter(n > 1) %>% 
   ungroup() %>% 
-  left_join(queryData[, c("userName", "teamName")]) %>% 
+  left_join(allUsers) %>% 
   mutate(userName=reorder(userName, n, ordered=TRUE))
 
-if (!useTeamGrouping) {
-  plotdata$teamName <- "All"
-}
-
-pUser <- ggplot(plotdata, aes(x=userName, y=n)) 
-pUser <- pUser + geom_point(aes(color=teamName), size=3)
-if (useTeamGrouping) {
-  pUser <- pUser + scale_color_brewer(palette = "Set1")
-} else{
-  pUser <- pUser + scale_color_manual(values="black")
-}
-
-pUser <- pUser + scale_y_log10()
-pUser <- pUser + mytheme + theme(axis.text.x=element_blank(), legend.position='top')
-# pUser <- pUser + mytheme + theme(axis.text.x=element_text(angle=270, hjust=0.5))
-pUser <- pUser + labs(x="User")
-pUser
+plotdata %>% top_n(20, n)  %>% arrange(-n) %>% select(n) %>% kable(row.names=TRUE)
 ```
 
-#### Entity Usage (more than 5 accesses)
+#### Entity downloads ($\geq 5$)
 ```{r include=TRUE, eval=TRUE}
 ### Data
 dataaccessCount <- queryData %>%
