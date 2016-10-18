@@ -104,7 +104,7 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
     allUsers$teamId <- "None"
   }
   
-  allUsers$teamId <- fct_expand(allUsers$teamId, "Anonymous", "None")
+  allUsers$teamId <- fct_expand(factor(allUsers$teamId), "Anonymous", "None")
   allUsers$teamId[is.na(allUsers$teamId)] <- "None"
   allUsers$teamId[allUsers$userId == "273950"] <- "Anonymous"
   
