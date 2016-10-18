@@ -19,6 +19,7 @@ synapseLogin()
 checkForProject <- function(projectId) {
   length(synQuery(sprintf('select id from project where projectId=="%s" LIMIT 1', projectId))) == 1
 }
+
 renderMyDocument <- function(reportType, projectId, nMonths, aclTeamOrder, useTeamGrouping, outputFile) {
     res <- rmarkdown::render(input=paste0("../../", reportType, ".Rmd"),
                       output_file=outputFile,
@@ -94,7 +95,7 @@ server <- shinyServer(function(input, output) {
   })
   
   output$teamList <- renderUI({
-    withProgress(message = 'Looking up team...', value = 0, {
+    withProgress(message = 'Looking up team...', value = NULL, style="old", {
       teamList <- teamACL()
       teamIds <- c(input$projectId, 
                    as.character(teamList$ownerId))
@@ -111,8 +112,8 @@ server <- shinyServer(function(input, output) {
   })
   
   res <- eventReactive(input$report, {
-    print("Making Report")
-    withProgress(message = 'Making report', value = 0, {
+    withProgress(message=sprintf("Making %s Report", input$reportType), 
+                 value = NULL, style="old", {
       
       validate(
         need(try(checkForProject(input$projectId)), 
