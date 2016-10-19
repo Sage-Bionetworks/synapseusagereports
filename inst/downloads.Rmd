@@ -3,10 +3,10 @@ output:
   html_document: 
     keep_md: yes
 params:
-  projectId: !r 'syn1773109'
-  nMonths: 6
-  useTeamGrouping: TRUE
-  aclTeamOrder: !r c("3319054", "2224090", "syn1773109", "273957")
+  projectId: !r 'syn2862345'
+  nMonths: 9
+  useTeamGrouping: FALSE
+  aclTeamOrder: !r c("3323597", "3330234", "syn2862345", "3332397")
 ---
 
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
@@ -23,8 +23,10 @@ library(synapseClient)
 library(RMySQL)
 library(yaml)
 library(lubridate)
+library(forcats)
 
 source("lib.R")
+# source("config.R")
 
 synapseLogin()
 
@@ -42,19 +44,46 @@ mytheme <- theme_bw() + theme(axis.text=element_text(size=16),
                               axis.title.x=element_text(size=18),
                               axis.title.y=element_text(size=18, angle=90))
 
-```
-```{r config}
-source("config.R")
 
 qTemplate <- 'select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,AR.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");'
 
 ```
 
+```{r config}
+config <- yaml.load_file("mysql_config.yml")
+
+projectId <- gsub("syn", "", params$projectId)
+nMonths <- params$nMonths
+useTeamGrouping <- params$useTeamGrouping
+aclTeamOrder <- params$aclTeamOrder
+
+con <- dbConnect(MySQL(),
+                 user = config$username,
+                 password = config$password,
+                 host = config$host,
+                 dbname='warehouse')
+
+endDate <- as.POSIXct(Sys.Date(), origin="1970-01-01", tz="PST")
+endTimestamp <- as.numeric(endDate) * 1000
+
+monthBreaks <- as.POSIXct(unlist(lapply(0:nMonths, function(x) endDate - months(x))),
+                          origin="1970-01-01")
+
+monthBreaksDf <- data.frame(beginTime=monthBreaks[2:(nMonths + 1)],
+                            endTime=monthBreaks[1:nMonths])
+
+timestampBreaksDf <- monthBreaksDf %>% 
+  mutate(beginTime=as.numeric(beginTime) * 1000,
+         endTime=as.numeric(endTime) * 1000)
+```
+
+
 ```{r domysqlquery}
 queryData <- getData(con=con, qTemplate=qTemplate, projectId=projectId,
                      timestampBreaksDf=timestampBreaksDf)
 ```
-### Downloads usage statistics from `r min(monthBreaksDf$beginTime)` to `r max(monthBreaksDf$endTime)`.
+
+### Download statistics from `r min(monthBreaksDf$beginTime)` to `r max(monthBreaksDf$endTime)`.
 
 ```{r users}
 if (useTeamGrouping) {
@@ -72,6 +101,24 @@ allUsers <- getQueryUserProfiles(queryData, useTeamGrouping, aclUserList)
 queryData <- queryData %>% left_join(., allUsers)
 ```
 
+#### Total Users
+There are `r length(setdiff(unique(queryData$userName), c("anonymous")))` users downloading files in this time period. 
+
+#### Returning users
+`r multiMonthVisits(queryData) %>% nrow` users have downloaded a file in at least two different months.
+
+#### New users (per month, starting from first month in the range):
+```{r}
+firstMonthToVisit(queryData) %>% kable
+```
+
+#### Unique users (per month, starting from first month in the range):
+```{r}
+uniqueUsersPerMonth(queryData) %>% 
+  #mutate(Date=paste(month(Date, label=TRUE), year(Date))) %>%
+  kable
+```
+
 #### Downloads per month
 ```{r loadpermonth}
 dateGroupingCount <- countByMonth(queryData, useTeamGrouping)
@@ -85,16 +132,7 @@ perdayCount <- countByDay(queryData, useTeamGrouping)
 
 ```{r plotperday, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 ### Per day usage, total
-plotByDay(queryData, useTeamGrouping)
-```
-```{r include=TRUE, eval=TRUE}
-### Users
-useraccessCount <- queryData %>% 
-  count(userName, userId, teamId, teamName) %>% 
-  ungroup() %>%
-  arrange(n) %>%
-  mutate(userName=reorder(userName, n, order=TRUE),
-         userId=reorder(userId, n, order=TRUE))
+plotByDay(perdayCount, useTeamGrouping)
 ```
 
 #### Downloads per user (top 20 users)
