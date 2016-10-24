@@ -1,3 +1,5 @@
+library(lubridate)
+
 config <- yaml.load_file("mysql_config.yml")
 
 projectId <- gsub("syn", "", params$projectId)
@@ -11,10 +13,11 @@ con <- dbConnect(MySQL(),
                  host = config$host,
                  dbname='warehouse')
 
-endDate <- as.POSIXct(Sys.Date(), origin="1970-01-01", tz="PST")
-endTimestamp <- as.numeric(endDate) * 1000
+endDate <- floor_date(today(), "month") + seconds(1)
+# endDate <- as.POSIXct(Sys.Date(), origin="1970-01-01", tz="PST")
+endTimestamp <- as.numeric(floor_date(endDate, "second")) * 1000
 
-monthBreaks <- as.POSIXct(unlist(lapply(0:nMonths, function(x) endDate - months(x))),
+monthBreaks <- as.POSIXct(endDate - months(0:nMonths),
                           origin="1970-01-01")
 
 monthBreaksDf <- data.frame(beginTime=monthBreaks[2:(nMonths + 1)],

@@ -3,10 +3,10 @@ output:
   html_document: 
     keep_md: yes
 params:
-  projectId: !r 'syn2862345'
-  nMonths: 9
+  projectId: !r 'syn2580853'
+  nMonths: 6
   useTeamGrouping: FALSE
-  aclTeamOrder: !r c("3323597", "3330234", "syn2862345", "3332397")
+  aclTeamOrder: !r c()
 ---
 
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
@@ -63,10 +63,11 @@ con <- dbConnect(MySQL(),
                  host = config$host,
                  dbname='warehouse')
 
-endDate <- as.POSIXct(Sys.Date(), origin="1970-01-01", tz="PST")
-endTimestamp <- as.numeric(endDate) * 1000
+endDate <- floor_date(today(), "month") + seconds(1)
+# endDate <- as.POSIXct(Sys.Date(), origin="1970-01-01", tz="PST")
+endTimestamp <- as.numeric(floor_date(endDate, "second")) * 1000
 
-monthBreaks <- as.POSIXct(unlist(lapply(0:nMonths, function(x) endDate - months(x))),
+monthBreaks <- as.POSIXct(endDate - months(0:nMonths),
                           origin="1970-01-01")
 
 monthBreaksDf <- data.frame(beginTime=monthBreaks[2:(nMonths + 1)],
