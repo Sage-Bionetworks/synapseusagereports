@@ -5,7 +5,7 @@ doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
     dplyr::rename(userid=USER_ID, id=ENTITY_ID)
   
   data %>% filter(RESPONSE_STATUS == 200)  %>% 
-    count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME) %>% 
+    dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME) %>% 
     ungroup()
   
 }
@@ -143,12 +143,12 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
 countByMonth <- function(queryData, useTeamGrouping) {
   if (useTeamGrouping) {
     dateGroupingCount <- queryData %>%
-      count(teamName, dateGrouping) %>% 
+      dplyr::count(teamName, dateGrouping) %>% 
       reshape2::dcast(teamName ~ dateGrouping)
   } else {
     dateGroupingCount <- queryData %>%
       mutate(teamName='All') %>% 
-      count(teamName, dateGrouping) %>% 
+      dplyr::count(teamName, dateGrouping) %>% 
       reshape2::dcast(teamName ~ dateGrouping)
   }
   
@@ -158,12 +158,12 @@ countByMonth <- function(queryData, useTeamGrouping) {
 countByDay <- function(queryData, useTeamGrouping) {
   if (useTeamGrouping) {
     perdayCount <- queryData %>%
-      count(teamName, date) %>% 
+      dplyr::count(teamName, date) %>% 
       arrange(n)
   } else { 
     perdayCount <- queryData %>%
       mutate(teamName="All") %>% 
-      count(teamName, date) %>% 
+      dplyr::count(teamName, date) %>% 
       arrange(n)
   }
   perdayCount
@@ -210,7 +210,7 @@ firstMonthToVisit <- function(queryData) {
     arrange(dateGrouping) %>% 
     slice(1) %>% ungroup() %>% 
     mutate(visit=1) %>%
-    count(dateGrouping)
+    dplyr::count(dateGrouping)
   
   missing <- unique(queryData$dateGrouping[!(queryData$dateGrouping %in% firstMonthVisit$dateGrouping)])
   
