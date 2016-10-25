@@ -1,3 +1,8 @@
+# Theme for plots
+mytheme <- theme_bw() + theme(axis.text=element_text(size=16),
+                              axis.title.x=element_text(size=18),
+                              axis.title.y=element_text(size=18, angle=90))
+
 doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
   
