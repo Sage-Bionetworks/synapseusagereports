@@ -136,7 +136,7 @@ plotdata <- queryData %>%
   # filter(n > 1) %>% 
   dplyr::ungroup() %>% 
   dplyr::left_join(allUsers) %>% 
-  dplyr::mutate(userName=dplyr::reorder(userName, n, ordered=TRUE))
+  dplyr::mutate(userName=reorder(userName, n, ordered=TRUE))
 
 plotdata %>% 
   dplyr::top_n(20, n) %>% 
