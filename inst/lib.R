@@ -235,3 +235,20 @@ multiMonthVisits <- function(queryData) {
     summarize(monthsVisited=n_distinct(dateGrouping)) %>% 
     filter(monthsVisited >= 2, userName != 'anonymous')
 }
+
+makeDateBreaks <- function(nMonths) {
+  endDate <- floor_date(today(), "month") + seconds(1)
+  # endDate <- as.POSIXct(Sys.Date(), origin="1970-01-01", tz="PST")
+  endTimestamp <- as.numeric(floor_date(endDate, "second")) * 1000
+  
+  monthBreaks <- as.POSIXct(endDate - months(0:nMonths),
+                            origin="1970-01-01")
+  
+  monthBreaksDf <- data.frame(beginDate=monthBreaks[2:(nMonths + 1)],
+                              endDate=monthBreaks[1:nMonths])
+  
+  monthBreaksDf %>% 
+    mutate(beginTime=as.numeric(beginDate) * 1000,
+           endTime=as.numeric(endDate) * 1000)
+  
+}
