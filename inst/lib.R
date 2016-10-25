@@ -1,7 +1,7 @@
 # Theme for plots
-mytheme <- theme_bw() + theme(axis.text=element_text(size=16),
-                              axis.title.x=element_text(size=18),
-                              axis.title.y=element_text(size=18, angle=90))
+mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=element_text(size=16),
+                                                axis.title.x=element_text(size=18),
+                                                axis.title.y=element_text(size=18, angle=90))
 
 doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
@@ -180,18 +180,18 @@ plotByDay <- function(perdayCount, useTeamGrouping) {
                   variable.name="teamName", value.name="n") %>% 
     dplyr::rename(group=variable, n=value)
   
-  p <- ggplot(plotdata, aes(x=date, y=n))
-  p <- p + geom_line(aes(group=group, color=group), size=1)
+  p <- ggplot2::ggplot(plotdata, aes(x=date, y=n))
+  p <- p + ggplot2::geom_line(aes(group=group, color=group), size=1)
   
   if (useTeamGrouping) {
-    p <- p + scale_color_brewer(palette = "Set1")
+    p <- p + ggplot2::scale_color_brewer(palette = "Set1")
   } else {
-    p <- p + scale_color_manual(values="black")
+    p <- p + ggplot2::scale_color_manual(values="black")
   }
 
-  p  <- p + mytheme + theme(axis.title.x=element_blank(),
-                            axis.text.x=element_text(size=16, angle=270),
-                            legend.position="top")
+  p  <- p + mytheme + ggplot2::theme(axis.title.x=ggplot2::element_blank(),
+                                     axis.text.x=ggplot2::element_text(size=16, angle=270),
+                                     legend.position="top")
   p
   
 }
