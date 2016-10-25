@@ -3,10 +3,13 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
                                                 axis.title.x=ggplot2::element_text(size=18),
                                                 axis.title.y=ggplot2::element_text(size=18, angle=90))
 
+queryDict <- c('downloads'='select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,AR.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");',
+               'webAccess'='select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");')
+
 doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
   
-  data <- RMySQL::dbGetQuery(conn = con, statement=q.browse) %>% 
+  data <- DBI::dbGetQuery(conn = con, statement=q.browse) %>% 
     dplyr::rename(userid=USER_ID, id=ENTITY_ID)
   
   data %>% dplyr::filter(RESPONSE_STATUS == 200)  %>% 
@@ -179,10 +182,10 @@ plotByDay <- function(perdayCount, useTeamGrouping) {
     reshape2::dcast(date ~ teamName, value.var='n', fill=0) %>% 
     reshape2::melt(., id.vars=c("date"), 
                    variable.name="teamName", value.name="n") %>% 
-    dplyr::rename(group=variable, n=value)
+    dplyr::rename(group=teamName)
   
-  p <- ggplot2::ggplot(plotdata, aes(x=date, y=n))
-  p <- p + ggplot2::geom_line(aes(group=group, color=group), size=1)
+  p <- ggplot2::ggplot(plotdata, ggplot2::aes(x=date, y=n))
+  p <- p + ggplot2::geom_line(ggplot2::aes(group=group, color=group), size=1)
   
   if (useTeamGrouping) {
     p <- p + ggplot2::scale_color_brewer(palette = "Set1")
@@ -242,7 +245,7 @@ makeDateBreaks <- function(nMonths) {
   endDate <- lubridate::floor_date(lubridate::today(), "month") + lubridate::seconds(1)
   endTimestamp <- as.numeric(lubridate::floor_date(endDate, "second")) * 1000
   
-  monthBreaks <- as.POSIXct(endDate - (period(1, "months") * 0:nMonths),
+  monthBreaks <- as.POSIXct(endDate - (lubridate::period(1, "months") * 0:nMonths),
                             origin="1970-01-01")
   
   monthBreaksDf <- data.frame(beginDate=monthBreaks[2:(nMonths + 1)],
