@@ -10,23 +10,12 @@ params:
 ---
 
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
-library(plyr)
 library(dplyr)
-library(reshape)
-library(data.table)
-library(xtable)
-library(knitr)
-library(ggplot2)
-library(scales)
-library(stringr)
 library(synapseClient)
 library(RMySQL)
 library(yaml)
-library(lubridate)
-library(forcats)
 
 source("lib.R")
-# source("config.R")
 
 synapseLogin()
 
@@ -68,7 +57,7 @@ queryData <- getData(con=con, qTemplate=qTemplate, projectId=projectId,
                      timestampBreaksDf=timestampBreaksDf)
 ```
 
-### Download statistics from `r min(timestampBreaksDf$beginTime)` to `r max(timestampBreaksDf$endTime)`.
+### Usage from `r min(timestampBreaksDf$beginTime)` to `r max(timestampBreaksDf$endTime)`.
 
 ```{r users}
 if (useTeamGrouping) {
@@ -94,20 +83,18 @@ There are `r length(setdiff(unique(queryData$userName), c("anonymous")))` users 
 
 #### New users (per month, starting from first month in the range):
 ```{r}
-firstMonthToVisit(queryData) %>% kable
+firstMonthToVisit(queryData) %>% knitr::kable
 ```
 
 #### Unique users (per month, starting from first month in the range):
 ```{r}
-uniqueUsersPerMonth(queryData) %>% 
-  #mutate(Date=paste(month(Date, label=TRUE), year(Date))) %>%
-  kable
+uniqueUsersPerMonth(queryData) %>% knitr::kable
 ```
 
 #### Downloads per month
 ```{r loadpermonth}
 dateGroupingCount <- countByMonth(queryData, useTeamGrouping)
-dateGroupingCount %>% kable
+dateGroupingCount %>% knitr::kable
 ```
 
 #### Downloads per day
@@ -129,16 +116,23 @@ plotdata <- queryData %>%
   left_join(allUsers) %>% 
   mutate(userName=reorder(userName, n, ordered=TRUE))
 
-plotdata %>% top_n(20, n)  %>% arrange(-n) %>% select(n) %>% kable(row.names=TRUE)
+plotdata %>% 
+  dplyr::top_n(20, n) %>%
+  dplyr::arrange(-n) %>% 
+  dplyr::select(n) %>% 
+  knitr::kable(row.names=TRUE)
 ```
 
-#### Entity downloads ($\geq 5$)
+#### Download counts ($\geq 5$)
 ```{r include=TRUE, eval=TRUE}
 ### Data
 dataaccessCount <- queryData %>%
-  count(id, NAME, NODE_TYPE) %>% 
-  filter(n > 5, !str_detect(id, "acl")) %>%
-  ungroup() %>% 
-  arrange(desc(n))
-dataaccessCount %>% select(id, NAME, NODE_TYPE, n) %>% kable
+  dplyr::count(id, NAME, NODE_TYPE) %>% 
+  dplyr::filter(n > 5, !stringr::str_detect(id, "acl")) %>%
+  dplyr::ungroup() %>% 
+  dplyr::arrange(dplyr::desc(n))
+
+dataaccessCount %>% 
+  dplyr::select(id, NAME, NODE_TYPE, n) %>% 
+  knitr::kable
 ```
