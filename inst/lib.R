@@ -161,20 +161,19 @@ countByMonth <- function(queryData, useTeamGrouping) {
 }
 
 countByDay <- function(queryData, useTeamGrouping) {
-  if (useTeamGrouping) {
-    perdayCount <- queryData %>%
-      dplyr::count(teamName, date) %>% 
-      arrange(n)
-  } else { 
-    perdayCount <- queryData %>%
-      mutate(teamName="All") %>% 
-      dplyr::count(teamName, date) %>% 
-      arrange(n)
+  tmp <- queryData
+
+    if (!useTeamGrouping) {
+    tmp <- tmp %>% mutate(teamName="All")
   }
-  perdayCount
+
+  tmp %>%
+    dplyr::count(teamName, date) %>% 
+    arrange(n)
+  
 }
 
-plotByDay <- function(perDayCount, useTeamGrouping) {
+plotByDay <- function(perdayCount, useTeamGrouping) {
   plotdata <- perdayCount %>% 
     reshape2::dcast(date ~ teamName, value.var='n', fill=0) %>% 
     reshape::melt(., id.vars=c("date"), 
