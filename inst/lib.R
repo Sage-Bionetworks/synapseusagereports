@@ -130,7 +130,7 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
                                             !startsWith(as.character(allUsers$teamId), 
                                                         "syn")) %>%
                               dplyr::select(teamId) %>% dplyr::distinct(),
-                      .(teamId),
+                      plyr::.(teamId),
                       function(x) {
                         tmp <- synapseClient::synRestGET(sprintf("/team/%s", x$teamId)); 
                         data.frame(teamId=x$teamId, teamName=tmp$name)
