@@ -6,9 +6,11 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 queryDict <- c('downloads'='select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,AR.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");',
                'webAccess'='select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");')
 
-doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
-  q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
-  
+# doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
+#   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
+doQuery <- function(con, template, projectId, month, year) {
+  q.browse <- sprintf(template, projectId, month, year)
+
   data <- DBI::dbGetQuery(conn = con, statement=q.browse) %>% 
     dplyr::rename(userid=USER_ID, id=ENTITY_ID)
   
@@ -20,13 +22,16 @@ doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
 
 getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
   
-  res <- plyr::ddply(timestampBreaksDf, .(beginTime, endTime),
-                     function (x) doQuery(con=con,
+  #res <- plyr::ddply(timestampBreaksDf, plyr::.(beginTime, endTime),
+  res <- plyr::ddply(timestampBreaksDf, plyr::.(month, year),
+                                        function (x) doQuery(con=con,
                                           template=qTemplate, 
                                           projectId=projectId, 
-                                          beginTimestamp=x$beginTime, 
-                                          endTimestamp=x$endTime))
-  
+                                          month=x$month,
+                                          year=x$year))
+  # beginTimestamp=x$beginTime, 
+  # endTimestamp=x$endTime))
+
   queryData <- res %>%
     dplyr::mutate(date=as.Date(as.character(DATE)),
                   userId=as.character(userid), 
@@ -53,9 +58,9 @@ getTeamMemberDF <- function(teamId) {
 }
 
 aclToMemberList <- function(acl) {
-  aclMemberList <- ldply(acl@resourceAccess@content, 
-                         function(x) data.frame(principalId=as.character(x@principalId),
-                                                teamId=acl@id))
+  aclMemberList <- plyr::ldply(acl@resourceAccess@content, 
+                               function(x) data.frame(principalId=as.character(x@principalId),
+                                                      teamId=acl@id))
   
   userGroupHeaders <- synapseClient::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s", 
                                                         paste(aclMemberList$principalId, 
@@ -124,7 +129,7 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
                               dplyr::filter(teamId != "None", teamId != "Anonymous",
                                             !startsWith(as.character(allUsers$teamId), 
                                                         "syn")) %>%
-                              dplyr::select(teamId) %>% dplyr::unique(),
+                              dplyr::select(teamId) %>% dplyr::distinct(),
                       .(teamId),
                       function(x) {
                         tmp <- synapseClient::synRestGET(sprintf("/team/%s", x$teamId)); 
@@ -242,17 +247,31 @@ multiMonthVisits <- function(queryData) {
 }
 
 makeDateBreaks <- function(nMonths) {
-  endDate <- lubridate::floor_date(lubridate::today(), "month") + lubridate::seconds(1)
-  endTimestamp <- as.numeric(lubridate::floor_date(endDate, "second")) * 1000
+  thisDate <- lubridate::floor_date(lubridate::today(), "month")- lubridate::period(1, "months")
   
-  monthBreaks <- as.POSIXct(endDate - (lubridate::period(1, "months") * 0:nMonths),
-                            origin="1970-01-01")
+  beginDates <- thisDate - (lubridate::period(1, "months") * 0:(nMonths - 1))
+
+  data.frame(date=beginDates, month=lubridate::month(beginDates), year=lubridate::year(beginDates))
+    # # endDates <- beginDates + (lubridate::days_in_month(beginDates)) - lubridate::seconds(1)
+  # # beginDates <- beginDates + lubridate::seconds(1)
+  # 
+  # monthBreaksDf <- data.frame(beginDate=beginDates, endDate=endDates)
+  # 
+  # monthBreaksDf %>% 
+  #   dplyr::mutate(beginTime=as.numeric(beginDate) * 1000,
+  #                 endTime=as.numeric(endDate) * 1000)
   
-  monthBreaksDf <- data.frame(beginDate=monthBreaks[2:(nMonths + 1)],
-                              endDate=monthBreaks[1:nMonths])
+}
+
+topNEntities <- function(queryData, allUsers, topN=20) {
+  plotdata <- queryData %>%
+    dplyr::count(userName) %>%
+    dplyr::ungroup() %>% 
+    dplyr::left_join(allUsers) %>% 
+    dplyr::mutate(userName=reorder(userName, n, ordered=TRUE))
   
-  monthBreaksDf %>% 
-    dplyr::mutate(beginTime=as.numeric(beginDate) * 1000,
-                  endTime=as.numeric(endDate) * 1000)
-  
+  plotdata %>% 
+    dplyr::top_n(topN, n) %>% 
+    dplyr::arrange(-n) %>% 
+    dplyr::select(n)
 }
