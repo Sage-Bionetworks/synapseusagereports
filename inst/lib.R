@@ -14,7 +14,8 @@ doQuery <- function(con, template, projectId, month, year) {
   data <- DBI::dbGetQuery(conn = con, statement=q.browse) %>% 
     dplyr::rename(userid=USER_ID, id=ENTITY_ID)
   
-  data %>% dplyr::filter(RESPONSE_STATUS == 200)  %>% 
+  data %>% 
+    # dplyr::filter(RESPONSE_STATUS == 200)  %>% 
     dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME) %>% 
     dplyr::ungroup()
   
