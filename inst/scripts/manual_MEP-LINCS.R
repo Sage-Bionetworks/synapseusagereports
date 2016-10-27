@@ -1,5 +1,5 @@
-templates <- c("webAccess"="./inst/webAccess.Rmd", 
-               "downloads"="./inst/downloads.Rmd")
+templates <- c("webAccess"="../webAccess.Rmd", 
+               "downloads"="../downloads.Rmd")
 
 ### MEP-LINCS
 projectId <- 'syn2862345'
