@@ -17,7 +17,9 @@ doQuery <- function(con, template, projectId, month, year) {
   data %>% 
     # dplyr::filter(RESPONSE_STATUS == 200)  %>% 
     dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME) %>% 
-    dplyr::ungroup()
+    dplyr::ungroup() %>%
+    select(-n)
+  
   
 }
 
@@ -29,7 +31,8 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
                                           template=qTemplate, 
                                           projectId=projectId, 
                                           month=x$month,
-                                          year=x$year))
+                                          year=x$year),
+                     .progress = 'text')
   # beginTimestamp=x$beginTime, 
   # endTimestamp=x$endTime))
 
@@ -172,8 +175,8 @@ countByMonth <- function(queryData, useTeamGrouping) {
 
 countByDay <- function(queryData, useTeamGrouping) {
   tmp <- queryData
-
-    if (!useTeamGrouping) {
+  
+  if (!useTeamGrouping) {
     tmp <- tmp %>% dplyr::mutate(teamName="All")
   }
 
