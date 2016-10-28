@@ -57,7 +57,7 @@ queryData <- getData(con=con, qTemplate=qTemplate, projectId=projectId,
                      timestampBreaksDf=timestampBreaksDf)
 ```
 
-### Usage from `r min(timestampBreaksDf$beginTime)` to `r max(timestampBreaksDf$endTime)`.
+### Usage from `r min(timestampBreaksDf$date)` to `r max(timestampBreaksDf$date)`.
 
 ```{r users}
 if (useTeamGrouping) {
