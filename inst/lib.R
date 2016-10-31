@@ -31,8 +31,7 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
                                           template=qTemplate, 
                                           projectId=projectId, 
                                           month=x$month,
-                                          year=x$year),
-                     .progress = 'text')
+                                          year=x$year))
   # beginTimestamp=x$beginTime, 
   # endTimestamp=x$endTime))
 
