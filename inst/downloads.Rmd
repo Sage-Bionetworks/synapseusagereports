@@ -116,12 +116,14 @@ topNEntities(queryData, allUsers, 20) %>% knitr::kable(row.names=TRUE)
 ```{r include=TRUE, eval=TRUE}
 ### Data
 dataaccessCount <- queryData %>%
-  dplyr::count(id, NAME, NODE_TYPE) %>% 
+  dplyr::count(id, NAME, NODE_TYPE, dateGrouping) %>% 
   dplyr::filter(n > 5, !stringr::str_detect(id, "acl")) %>%
-  dplyr::ungroup() %>% 
-  dplyr::arrange(dplyr::desc(n))
-
-dataaccessCount %>% 
-  dplyr::select(id, NAME, NODE_TYPE, n) %>% 
+  dplyr::ungroup() %>%
+  dplyr::arrange(dplyr::desc(n)) %>% 
+  reshape2::dcast(id + NAME + NODE_TYPE ~ dateGrouping, value.var='n') %>% 
   knitr::kable()
+
+# dataaccessCount %>% 
+#   dplyr::select(id, NAME, NODE_TYPE, n) %>% 
+#   knitr::kable()
 ```
