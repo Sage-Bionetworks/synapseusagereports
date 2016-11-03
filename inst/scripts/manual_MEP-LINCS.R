@@ -4,7 +4,7 @@ templates <- c("webAccess"="../webAccess.Rmd",
 ### MEP-LINCS
 projectId <- 'syn2862345'
 myParams <- list(projectId=projectId, 
-                 nMonths=2, 
+                 nMonths=22, 
                  aclTeamOrder=c(3323597, 3330234, 3332397, projectId), 
                  useTeamGrouping=TRUE)
 
