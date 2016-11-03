@@ -26,13 +26,18 @@ doQuery <- function(con, template, projectId, month, year) {
 getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
 
   maxDate <- max(timestampBreaksDf$date)
-  q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS.%s SELECT DISTINCT ID, TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s AND TIMESTAMP < UNIX_TIMESTAMP('%s')*1000 GROUP BY ID HAVING UNIX_TIMESTAMP('%s')*1000 - TIMESTAMP = MIN(UNIX_TIMESTAMP('%s')*1000 - TIMESTAMP)"
+  
+  # q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS.%s SELECT DISTINCT ID, TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s AND TIMESTAMP < UNIX_TIMESTAMP('%s')*1000 GROUP BY ID HAVING UNIX_TIMESTAMP('%s')*1000 - TIMESTAMP = MIN(UNIX_TIMESTAMP('%s')*1000 - TIMESTAMP)"
+  # create <- DBI::dbSendQuery(conn=con,
+  #                            statement=sprintf(q.create_temp, projectId,
+  #                                              projectId, maxDate,
+  #                                              maxDate, maxDate,
+  #                                              maxDate))
+  # 
+  q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS.%s SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
   create <- DBI::dbSendQuery(conn=con,
-                              statement=sprintf(q.create_temp, projectId,
-                                                projectId, maxDate,
-                                                maxDate, maxDate,
-                                                maxDate))
-
+                             statement=sprintf(q.create_temp, projectId, projectId))
+  
   #res <- plyr::ddply(timestampBreaksDf, plyr::.(beginTime, endTime),
   res <- plyr::ddply(timestampBreaksDf, plyr::.(month, year),
                                         function (x) doQuery(con=con,
