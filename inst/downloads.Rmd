@@ -117,13 +117,20 @@ topNEntities(queryData, allUsers, 20) %>% knitr::kable(row.names=TRUE)
 #### Download counts ($\geq 5$)
 ```{r include=TRUE, eval=TRUE}
 ### Data
-dataaccessCount <- queryData %>%
+tmp <- queryData %>%
+  dplyr::count(id, NAME, NODE_TYPE) %>% 
+  dplyr::filter(n >= 5, !stringr::str_detect(id, "acl"))
+
+dataaccessCount <- queryData %>% 
+  dplyr::filter(id %in% tmp$id) %>% 
   dplyr::count(id, NAME, NODE_TYPE, dateGrouping) %>% 
-  dplyr::filter(n > 5, !stringr::str_detect(id, "acl")) %>%
   dplyr::ungroup() %>%
   dplyr::arrange(dplyr::desc(n)) %>% 
   reshape2::dcast(id + NAME + NODE_TYPE ~ dateGrouping, value.var='n') %>% 
-  knitr::kable()
+  dplyr::mutate(name=sprintf("[%s](https://www.synapse.org/#!Synapse:syn%s)", NAME, id)) %>% 
+  dplyr::select(name, everything(), -id, -NAME)
+
+dataaccessCount %>% knitr::kable()
 
 # dataaccessCount %>% 
 #   dplyr::select(id, NAME, NODE_TYPE, n) %>% 
