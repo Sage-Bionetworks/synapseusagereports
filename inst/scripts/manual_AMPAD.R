@@ -6,7 +6,7 @@ projectId <- 'syn2580853'
 reportType <- "webAccess"
 
 myParams <- list(projectId=projectId, 
-                 nMonths=12, 
+                 nMonths=28, 
                  aclTeamOrder=c(3346847, projectId), 
                  useTeamGrouping=TRUE)
 
