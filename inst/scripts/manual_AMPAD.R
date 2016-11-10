@@ -6,17 +6,17 @@ projectId <- 'syn2580853'
 reportType <- "webAccess"
 
 myParams <- list(projectId=projectId, 
-                 nMonths=28, 
-                 aclTeamOrder=c(3346847, projectId), 
+                 nMonths=6, 
+                 aclTeamOrder=c(3346847, 3320424, projectId), 
                  useTeamGrouping=TRUE)
 
-reportType <- "webAccess"
+reportType <- 'downloads'
 rmarkdown::render(input=templates[[reportType]],
                   output_file=paste0(myParams[['projectId']], "_", reportType, "_",
                                      lubridate::today(), ".html"),
                   params = myParams)
 
-reportType <- 'downloads'
+reportType <- "webAccess"
 rmarkdown::render(input=templates[[reportType]],
                   output_file=paste0(myParams[['projectId']], "_", reportType, "_",
                                      lubridate::today(), ".html"),
