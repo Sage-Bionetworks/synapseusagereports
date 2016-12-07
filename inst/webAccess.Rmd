@@ -79,23 +79,30 @@ queryData <- queryData %>%
   left_join(., allUsers)
 ```
 
-#### Total Users
-There are `r length(setdiff(unique(queryData$userName), c("anonymous")))` active users in this time period. 
-
-#### Returning users
-`r multiMonthVisits(queryData) %>% nrow` users have viewed a page in at least two different months.
-
-#### New users (per month, starting from first month in the range):
+#### New and unique users per month, starting from first month in the range:
 ```{r}
-firstMonthToVisit(queryData) %>% knitr::kable()
+newUsers <- firstMonthToVisit(queryData) %>% mutate(source='New')
+uniqueUsers <- uniqueUsersPerMonth(queryData) %>% mutate(source='Unique')
+
+rbind(newUsers, uniqueUsers) %>% 
+  reshape2::dcast(source ~ Date, value.var='Users') %>%
+  knitr::kable()
+
 ```
 
-#### Unique users (per month, starting from first month in the range):
+#### Unique users per team (per month, starting from first month in the range):
 ```{r}
-uniqueUsersPerMonth(queryData) %>% knitr::kable()
+queryData %>% 
+  select(dateGrouping, teamName, userName) %>% 
+  distinct() %>% 
+  count(dateGrouping, teamName) %>% 
+  reshape2::dcast(teamName ~ dateGrouping, value.var='n') %>% 
+  knitr::kable()
 ```
 
-#### Website access per month
+There are `r length(setdiff(unique(queryData$userName), c("anonymous")))` active registered Synapse users in this time period. Of these, `r multiMonthVisits(queryData) %>% nrow` users have viewed a page in at least two different months.
+
+#### Page views per month
 ```{r loadpermonth, include=TRUE, eval=TRUE}
 if (useTeamGrouping) {
   dateGroupingCount <- queryData %>%
@@ -111,7 +118,7 @@ if (useTeamGrouping) {
 dateGroupingCount %>% knitr::kable()
 ```
 
-#### Website access per day
+#### Page views per day
 ```{r loadperday, include=TRUE, eval=TRUE}
 perdayCount <- countByDay(queryData, useTeamGrouping)
 ```
@@ -119,23 +126,6 @@ perdayCount <- countByDay(queryData, useTeamGrouping)
 ```{r plotperday, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 ### Per day usage, total
 plotByDay(perdayCount, useTeamGrouping)
-```
-
-#### Views per user (top 20 users)
-```{r peruser}
-# plotdata <- queryData %>%
-#   dplyr::count(userName) %>%
-#   # filter(n > 1) %>% 
-#   dplyr::ungroup() %>% 
-#   dplyr::left_join(allUsers) %>% 
-#   dplyr::mutate(userName=reorder(userName, n, ordered=TRUE))
-# 
-# plotdata %>% 
-#   dplyr::top_n(20, n) %>% 
-#   dplyr::arrange(-n) %>% 
-#   dplyr::select(n) %>% 
-#   knitr::kable(row.names=TRUE)
-topNEntities(queryData, allUsers, 20) %>% knitr::kable(row.names=TRUE)
 ```
 
 #### Entity Usage (more than 5 accesses)
@@ -150,7 +140,9 @@ dataaccessCount1 <- queryData %>%
   dplyr::count(id, NAME, NODE_TYPE, dateGrouping) %>% 
   dplyr::ungroup() %>%
   reshape2::dcast(id + NAME + NODE_TYPE ~ dateGrouping, value.var='n') %>% 
-  dplyr::mutate(name=sprintf("[%s](https://www.synapse.org/#!Synapse:syn%s)", NAME, id))
+  dplyr::mutate(name=sprintf("<a href='https://www.synapse.org/#!Synapse:syn%s' target='_blank'>%s</a>", id, NAME))
+  # dplyr::mutate(name=sprintf("[%s](https://www.synapse.org/#!Synapse:syn%s)", NAME, id))
+
 
 dataaccessCount2 <- queryData %>% 
   dplyr::filter(id %in% tmp$id) %>% 
@@ -163,5 +155,5 @@ dataaccessCount <- dataaccessCount1 %>% left_join(dataaccessCount2, by=c("id", "
   dplyr::rename(total=n) %>% 
   dplyr::select(name, everything(), total, -id, -NAME)
 
-dataaccessCount %>% knitr::kable()
+dataaccessCount %>% DT::datatable(options=list(pageLength=20), escape=1)
 ```
