@@ -1,7 +1,7 @@
 templates <- c("webAccess"="../webAccess.Rmd", 
                "downloads"="../downloads.Rmd")
 
-### MEP-LINCS
+### AMP-AD
 projectId <- 'syn2580853'
 reportType <- "webAccess"
 
