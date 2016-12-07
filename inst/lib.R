@@ -133,16 +133,16 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
     allUsers <- dplyr::left_join(allUsersList, aclUserList)
   } else{
     allUsers <- allUsersList
-    allUsers$teamId <- "None"
+    allUsers$teamId <- "Registered Synapse User"
   }
   
-  allUsers$teamId <- forcats::fct_expand(factor(allUsers$teamId), "Anonymous", "None")
-  allUsers$teamId[is.na(allUsers$teamId)] <- "None"
+  allUsers$teamId <- forcats::fct_expand(factor(allUsers$teamId), "Anonymous", "Registered Synapse User")
+  allUsers$teamId[is.na(allUsers$teamId)] <- "Registered Synapse User"
   allUsers$teamId[allUsers$userId == "273950"] <- "Anonymous"
   
   if (useTeamGrouping) {
     teamInfo <- plyr::ddply(allUsers %>% 
-                              dplyr::filter(teamId != "None", teamId != "Anonymous",
+                              dplyr::filter(teamId != "Registered Synapse User", teamId != "Anonymous",
                                             !startsWith(as.character(allUsers$teamId), 
                                                         "syn")) %>%
                               dplyr::select(teamId) %>% dplyr::distinct(),
@@ -155,13 +155,13 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
     if (nrow(teamInfo) > 0) {
       allUsers <- dplyr::left_join(allUsers, teamInfo, by="teamId")
     } else {
-      allUsers$teamName <- "None"
+      allUsers$teamName <- "Registered Synapse User"
     }
   } else {
-    allUsers$teamName <- "None"
+    allUsers$teamName <- "Registered Synapse User"
   }
   
-  allUsers$teamName <- forcats::fct_expand(factor(allUsers$teamName), "None")
+  allUsers$teamName <- forcats::fct_expand(factor(allUsers$teamName), "Registered Synapse User")
   naTeamNames <- is.na(allUsers$teamName)
   
   allUsers$teamName <- forcats::fct_expand(allUsers$teamName,
@@ -252,7 +252,7 @@ firstMonthToVisit <- function(queryData) {
   
   firstMonthVisit %>% 
     dplyr::arrange(dateGrouping) %>% 
-    dplyr::rename(Date=dateGrouping, `New Users`=n)
+    dplyr::rename(Date=dateGrouping, Users=n)
 }
 
 multiMonthVisits <- function(queryData) {
