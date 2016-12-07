@@ -18,7 +18,7 @@ doQuery <- function(con, template, projectId, month, year) {
     # dplyr::filter(RESPONSE_STATUS == 200)  %>% 
     dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME) %>% 
     dplyr::ungroup() %>%
-    select(-n)
+    rename(duplicateCount=n)
   
   
 }
