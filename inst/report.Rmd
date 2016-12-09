@@ -1,0 +1,160 @@
+---
+output: 
+  html_document: 
+    keep_md: yes
+params:
+  projectId: !r 'syn1773109'
+  nMonths: 1
+  useTeamGrouping: FALSE
+  aclTeamOrder: !r c('syn1773109')
+---
+
+```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
+library(dplyr)
+library(synapseClient)
+library(RMySQL)
+library(yaml)
+source("lib.R")
+
+synapseLogin()
+
+options(xtable.type="html")
+
+knitr::opts_chunk$set(
+  echo=FALSE,
+  warning=FALSE,
+  message=FALSE,
+  error = FALSE,
+  tidy = FALSE,
+  fig.width=20)
+
+# qTemplate <- 'select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");'
+
+qTemplate <- 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS.%s NODE where AR.RESPONSE_STATUS=200 AND MONTH(FROM_UNIXTIME(AR.TIMESTAMP/1000))=%s AND YEAR(FROM_UNIXTIME(AR.TIMESTAMP/1000))=%s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID AND N.ID = NODE.ID and N.TIMESTAMP = NODE.TIMESTAMP and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/bundle", "GET /entity/#/version/#/bundle", "GET /entity/#/wiki2", "GET /entity/#/wiki2/#"));'
+
+```
+
+```{r config}
+config <- yaml.load_file("~/datawarehouse_config.yml")
+
+projectId <- gsub("syn", "", params$projectId)
+nMonths <- params$nMonths
+useTeamGrouping <- params$useTeamGrouping
+aclTeamOrder <- params$aclTeamOrder
+
+con <- dbConnect(MySQL(),
+                 user = config$username,
+                 password = config$password,
+                 host = config$host,
+                 dbname='warehouse')
+
+timestampBreaksDf <- makeDateBreaks(nMonths)
+
+```
+
+```{r domysqlquery}
+queryData <- getData(con=con, qTemplate=qTemplate, projectId=projectId,
+                     timestampBreaksDf=timestampBreaksDf)
+
+```
+### Usage from `r min(timestampBreaksDf$date)` to `r max(timestampBreaksDf$date)`.
+
+```{r users}
+if (useTeamGrouping) {
+  aclUserList <- processAclUserList(projectId, aclTeamOrder)
+} else {
+  aclUserList <- NULL
+}
+```
+
+```{r summaryuseraccess}
+# Get user profile info for users in data download records
+
+allUsers <- getQueryUserProfiles(queryData, useTeamGrouping, aclUserList)
+
+```
+
+```{r userJoin}
+queryData <- queryData %>%
+  left_join(., allUsers)
+```
+
+#### New and unique users per month, starting from first month in the range:
+```{r}
+newUsers <- firstMonthToVisit(queryData) %>% mutate(source='New')
+uniqueUsers <- uniqueUsersPerMonth(queryData) %>% mutate(source='Unique')
+
+rbind(newUsers, uniqueUsers) %>% 
+  reshape2::dcast(source ~ Date, value.var='Users') %>%
+  knitr::kable()
+
+```
+
+#### Unique users per team (per month, starting from first month in the range):
+```{r}
+queryData %>% 
+  select(dateGrouping, teamName, userName) %>% 
+  distinct() %>% 
+  count(dateGrouping, teamName) %>% 
+  reshape2::dcast(teamName ~ dateGrouping, value.var='n') %>% 
+  knitr::kable()
+```
+
+There are `r length(setdiff(unique(queryData$userName), c("anonymous")))` active registered Synapse users in this time period. Of these, `r multiMonthVisits(queryData) %>% nrow` users have viewed a page in at least two different months.
+
+#### Page views per month
+```{r loadpermonth, include=TRUE, eval=TRUE}
+if (useTeamGrouping) {
+  dateGroupingCount <- queryData %>%
+    dplyr::count(teamName, dateGrouping) %>% 
+    reshape2::dcast(teamName ~ dateGrouping, fun.aggregate = sum)
+} else {
+  dateGroupingCount <- queryData %>%
+    dplyr::mutate(teamName='All') %>% 
+    dplyr::count(teamName, dateGrouping) %>% 
+    reshape2::dcast(teamName ~ dateGrouping)
+}
+
+dateGroupingCount %>% knitr::kable()
+```
+
+#### Page views per day
+```{r loadperday, include=TRUE, eval=TRUE}
+perdayCount <- countByDay(queryData, useTeamGrouping)
+```
+
+```{r plotperday, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
+### Per day usage, total
+plotByDay(perdayCount, useTeamGrouping)
+```
+
+#### Entity page views (top 100 with more than 5 views)
+```{r include=TRUE, eval=TRUE}
+### Data
+tmp <- queryData %>%
+  dplyr::count(id, NAME, NODE_TYPE) %>% 
+  dplyr::filter(n >= 5, !stringr::str_detect(id, "acl"))
+
+dataaccessCount1 <- queryData %>% 
+  dplyr::filter(id %in% tmp$id) %>% 
+  dplyr::count(id, NAME, NODE_TYPE, dateGrouping) %>% 
+  dplyr::ungroup() %>%
+  reshape2::dcast(id + NAME + NODE_TYPE ~ dateGrouping, value.var='n') %>% 
+  dplyr::mutate(name=sprintf("<a href='https://www.synapse.org/#!Synapse:syn%s' target='_blank'>%s</a>", id, NAME))
+  # dplyr::mutate(name=sprintf("[%s](https://www.synapse.org/#!Synapse:syn%s)", NAME, id))
+
+
+dataaccessCount2 <- queryData %>% 
+  dplyr::filter(id %in% tmp$id) %>% 
+  dplyr::count(id, NAME, NODE_TYPE) %>% 
+  dplyr::ungroup() %>%
+  dplyr::arrange(dplyr::desc(n))
+
+dataaccessCount <- dataaccessCount1 %>% left_join(dataaccessCount2, by=c("id", "NAME", "NODE_TYPE")) %>% 
+  dplyr::arrange(dplyr::desc(n)) %>%
+  head(100) %>% 
+  dplyr::rename(total=n) %>% 
+  dplyr::select(name, everything(), total, -id, -NAME)
+
+dataaccessCount %>% DT::datatable(options=list(pageLength=20), escape=1)
+```
