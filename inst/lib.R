@@ -11,16 +11,33 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 doQuery <- function(con, template, projectId, month, year) {
   q.browse <- sprintf(template, projectId, month, year)
 
-  data <- DBI::dbGetQuery(conn = con, statement=q.browse) %>% 
+  DBI::dbGetQuery(conn = con, statement=q.browse) %>% 
     dplyr::rename(userid=USER_ID, id=ENTITY_ID)
   
-  data %>% 
-    # dplyr::filter(RESPONSE_STATUS == 200)  %>% 
+}
+
+processQuery <- function(data) {
+
+  queryData <- data %>% 
     dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME) %>% 
     dplyr::ungroup() %>%
     rename(duplicateCount=n)
   
+  queryData <- queryData %>%
+    dplyr::mutate(date=as.Date(as.character(DATE)),
+                  userId=as.character(userid), 
+                  dateGrouping=lubridate::floor_date(date, unit="month"),
+                  monthYear=paste(lubridate::month(dateGrouping, label=TRUE),
+                                  lubridate::year(dateGrouping)))
   
+  # Get unique due to folder, file name changes
+  # Might not be most recent name!
+  queryData <- queryData %>% 
+    dplyr::group_by(id, userid, TIMESTAMP) %>% 
+    dplyr::slice(1) %>% 
+    dplyr::ungroup()
+  
+  queryData
 }
 
 getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
@@ -48,21 +65,7 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
   # beginTimestamp=x$beginTime, 
   # endTimestamp=x$endTime))
 
-  queryData <- res %>%
-    dplyr::mutate(date=as.Date(as.character(DATE)),
-                  userId=as.character(userid), 
-                  dateGrouping=lubridate::floor_date(date, unit="month"),
-                  monthYear=paste(lubridate::month(dateGrouping, label=TRUE),
-                                  lubridate::year(dateGrouping)))
-  
-  # Get unique due to folder, file name changes
-  # Might not be most recent name!
-  queryData <- queryData %>% 
-    dplyr::group_by(id, userid, TIMESTAMP) %>% 
-    dplyr::slice(1) %>% 
-    dplyr::ungroup()
-  
-  queryData
+  res
 }
 
 getTeamMemberDF <- function(teamId) {
