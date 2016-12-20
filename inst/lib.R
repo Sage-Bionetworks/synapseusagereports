@@ -8,8 +8,10 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 
 # doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
 #   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
-doQuery <- function(con, template, projectId, month, year) {
-  q.browse <- sprintf(template, projectId, month, year)
+
+doQuery <- function(con, template, projectId, date) {
+  message(sprintf("%s", date))
+  q.browse <- sprintf(template, projectId, date, date)
 
   DBI::dbGetQuery(conn = con, statement=q.browse) %>% 
     dplyr::rename(userid=USER_ID, id=ENTITY_ID)
@@ -60,8 +62,7 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
                                         function (x) doQuery(con=con,
                                           template=qTemplate, 
                                           projectId=projectId, 
-                                          month=x$month,
-                                          year=x$year))
+					  date=x$date))
   # beginTimestamp=x$beginTime, 
   # endTimestamp=x$endTime))
 

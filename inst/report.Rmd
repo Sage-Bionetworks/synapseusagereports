@@ -30,9 +30,15 @@ knitr::opts_chunk$set(
 
 # qTemplate <- 'select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");'
 
-qPageviewTemplate <- 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS.%s NODE where AR.RESPONSE_STATUS=200 AND MONTH(FROM_UNIXTIME(AR.TIMESTAMP/1000))=%s AND YEAR(FROM_UNIXTIME(AR.TIMESTAMP/1000))=%s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID AND N.ID = NODE.ID and N.TIMESTAMP = NODE.TIMESTAMP and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/bundle", "GET /entity/#/version/#/bundle", "GET /entity/#/wiki2", "GET /entity/#/wiki2/#"));'
+# qPageviewTemplate <- 'select CLIENT,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS.%s NODE where AR.RESPONSE_STATUS=200 AND MONTH(FROM_UNIXTIME(AR.TIMESTAMP/1000))=%s AND YEAR(FROM_UNIXTIME(AR.TIMESTAMP/1000))=%s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID AND N.ID = NODE.ID and N.TIMESTAMP = NODE.TIMESTAMP and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/bundle", "GET /entity/#/version/#/bundle", "GET /entity/#/wiki2", "GET /entity/#/wiki2/#"));'
 
-qDownloadTemplate <- 'select CLIENT,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS.%s NODE where MONTH(FROM_UNIXTIME(AR.TIMESTAMP/1000))=%s AND YEAR(FROM_UNIXTIME(AR.TIMESTAMP/1000))=%s and (AR.RESPONSE_STATUS IN (200, 307)) AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID AND N.TIMESTAMP = NODE.TIMESTAMP and (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/file", "GET /entity/#/version/#/file"));'
+# qDownloadTemplate <- 'select CLIENT,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS.%s NODE where MONTH(FROM_UNIXTIME(AR.TIMESTAMP/1000))=%s AND YEAR(FROM_UNIXTIME(AR.TIMESTAMP/1000))=%s and (AR.RESPONSE_STATUS IN (200, 307)) AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID AND N.TIMESTAMP = NODE.TIMESTAMP and (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/file", "GET /entity/#/version/#/file"));'
+
+qPageviewTemplate <- 'select CLIENT,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS.%s NODE where AR.RESPONSE_STATUS=200 AND AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID AND N.ID = NODE.ID and N.TIMESTAMP = NODE.TIMESTAMP and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/bundle", "GET /entity/#/version/#/bundle", "GET /entity/#/wiki2", "GET /entity/#/wiki2/#"));'
+
+qDownloadTemplate <- 'select CLIENT,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS.%s NODE where AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 and (AR.RESPONSE_STATUS IN (200, 307)) AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID AND N.TIMESTAMP = NODE.TIMESTAMP and (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/file", "GET /entity/#/version/#/file"));'
+
+
 ```
 
 ```{r config}
@@ -61,14 +67,12 @@ queryDataPageviews <- getData(con=con, qTemplate=qPageviewTemplate,
                               timestampBreaksDf=timestampBreaksDf) %>% 
   dplyr::mutate(recordType='pageview')
 
-foo <- DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS.1773109;')
+foo <- DBI::dbSendQuery(conn=con, statement=sprintf('DROP TABLE PROJECT_STATS.%s;', projectId))
 
 queryDataDownloads <- getData(con=con, qTemplate=qDownloadTemplate, 
                               projectId=projectId,
                               timestampBreaksDf=timestampBreaksDf) %>% 
   dplyr::mutate(recordType='download')
-
-foo <- DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS.1773109;')
 
 queryData <- rbind(queryDataPageviews, queryDataDownloads)
 
@@ -170,7 +174,7 @@ dataaccessCount2 <- queryData %>%
 
 dataaccessCount <- dataaccessCount1 %>% left_join(dataaccessCount2, by=c("id", "NAME", "NODE_TYPE")) %>% 
   dplyr::arrange(dplyr::desc(n)) %>%
-  head(100) %>% 
+  head(50) %>% 
   dplyr::rename(total=n) %>% 
   dplyr::select(name, everything(), total, -id, -NAME)
 
@@ -204,7 +208,7 @@ dataaccessCount2 <- queryData %>%
 
 dataaccessCount <- dataaccessCount1 %>% left_join(dataaccessCount2, by=c("id", "NAME", "NODE_TYPE")) %>% 
   dplyr::arrange(dplyr::desc(n)) %>%
-  head(100) %>% 
+  head(50) %>% 
   dplyr::rename(total=n) %>% 
   dplyr::select(name, everything(), total, -id, -NAME)
 
