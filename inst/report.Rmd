@@ -67,6 +67,8 @@ queryDataPageviews <- getData(con=con, qTemplate=qPageviewTemplate,
                               timestampBreaksDf=timestampBreaksDf) %>% 
   dplyr::mutate(recordType='pageview')
 
+queryDataPageviewsProcessed <- processQuery(queryDataPageviews)
+
 foo <- DBI::dbSendQuery(conn=con, statement=sprintf('DROP TABLE PROJECT_STATS.%s;', projectId))
 
 queryDataDownloads <- getData(con=con, qTemplate=qDownloadTemplate, 
@@ -74,10 +76,13 @@ queryDataDownloads <- getData(con=con, qTemplate=qDownloadTemplate,
                               timestampBreaksDf=timestampBreaksDf) %>% 
   dplyr::mutate(recordType='download')
 
-queryData <- rbind(queryDataPageviews, queryDataDownloads)
+queryDataDownloadsProcessed <- processQuery(queryDataDownloads)
+
+queryData <- rbind(queryDataPageviewsProcessed, queryDataDownloadsProcessed)
+
 
 ```
-### Activity on Synapse project `proj@properties$name` (`r params$projectId`) from `r min(timestampBreaksDf$date)` to `r max(timestampBreaksDf$date)`.
+### Activity on Synapse project `r proj@properties$name` (`r params$projectId`) from `r min(timestampBreaksDf$date)` to `r max(timestampBreaksDf$date)`.
 
 ```{r users}
 if (useTeamGrouping) {
@@ -96,10 +101,11 @@ allUsers <- getQueryUserProfiles(queryData, useTeamGrouping, aclUserList)
 
 ```{r userJoin}
 queryData <- queryData %>%
-  left_join(., allUsers)
+  left_join(., allUsers) %>%
+  dplyr::filter(!is.na(teamName))
 ```
 
-#### Active new and unique users per month, starting from first month in the range:
+#### Active new and unique registered Synapse users per month, starting from first month in the range:
 ```{r}
 newUsers <- firstMonthToVisit(queryData) %>% mutate(source='New')
 uniqueUsers <- uniqueUsersPerMonth(queryData) %>% mutate(source='Unique')
@@ -110,10 +116,11 @@ rbind(newUsers, uniqueUsers) %>%
 
 ```
 
-#### Active users per team (per month):
+#### Active registered Synapse users per team (per month):
 ```{r}
 queryData %>% 
   select(dateGrouping, teamName, userName) %>% 
+  filter(teamName != "Anonymous") %>%
   distinct() %>% 
   count(dateGrouping, teamName) %>% 
   reshape2::dcast(teamName ~ dateGrouping, value.var='n') %>% 

@@ -1,3 +1,5 @@
+library(lubridate)
+
 # Theme for plots
 mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(size=16),
                                                 axis.title.x=ggplot2::element_text(size=18),
@@ -11,7 +13,7 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 
 doQuery <- function(con, template, projectId, date) {
   message(sprintf("%s", date))
-  q.browse <- sprintf(template, projectId, date, date)
+  q.browse <- sprintf(template, projectId, date, date %m+% months(1))
 
   DBI::dbGetQuery(conn = con, statement=q.browse) %>% 
     dplyr::rename(userid=USER_ID, id=ENTITY_ID)
@@ -21,21 +23,17 @@ doQuery <- function(con, template, projectId, date) {
 processQuery <- function(data) {
 
   queryData <- data %>% 
-    dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME) %>% 
-    dplyr::ungroup() %>%
-    rename(duplicateCount=n)
-  
-  queryData <- queryData %>%
+    dplyr::select(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>% 
+    # dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>% 
+    # dplyr::ungroup() %>%
+    # rename(duplicateCount=n) %>%
     dplyr::mutate(date=as.Date(as.character(DATE)),
                   userId=as.character(userid), 
                   dateGrouping=lubridate::floor_date(date, unit="month"),
                   monthYear=paste(lubridate::month(dateGrouping, label=TRUE),
-                                  lubridate::year(dateGrouping)))
-  
-  # Get unique due to folder, file name changes
-  # Might not be most recent name!
-  queryData <- queryData %>% 
-    dplyr::group_by(id, userid, TIMESTAMP) %>% 
+                                  lubridate::year(dateGrouping))) %>%  
+    dplyr::group_by(id, userid, TIMESTAMP, recordType) %>% # Get unique due to name changes, might not be most recent name!
+    dplyr::arrange(TIMESTAMP) %>% 
     dplyr::slice(1) %>% 
     dplyr::ungroup()
   
