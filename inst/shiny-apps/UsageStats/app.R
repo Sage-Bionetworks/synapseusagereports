@@ -51,8 +51,8 @@ ui <- shinyUI(fluidPage(
          actionButton('lookup', "Lookup Project"),
          uiOutput('teamList'),
          hr(),
-         selectInput('reportType', "Report Type", choices=c("webAccess", "downloads"), 
-                     selected="downloads"),
+         selectInput('reportType', "Report Type", choices=c("report"), 
+                     selected="report"),
          sliderInput("months", "Months", min=1, max=12, value=2, step=1),
          hr(),
          actionButton('report', "Make Report")
@@ -60,18 +60,7 @@ ui <- shinyUI(fluidPage(
       
       # Show a plot of the generated distribution
       mainPanel(
-        p("This page will generate usage statistics reports (in HTML format) for a Synapse Project."),
-        br(),
-        p("Type in a Synapse project ID and click the 'Lookup Project' button.",
-          'This will find the Teams on the ACL in this project.'),
-        br(),
-        p('Select the Teams in order of precedence (so users who are on multiple teams will not be counted extra). This is only used if the "Group by teams" box is checked.'), 
-        br(),
-        p('Next, select the type of report and number of months to query.'),
-        br(),
-        p("Then, click the 'Make Report' button, A 'Download' button will appear when the report has been generated."),
-        br(),
-        p("A PDF of this report can be generated in most browsers by printing the HTML to a PDF file."),
+        includeMarkdown('info.md'),
         hr(),
         uiOutput("results")
       )

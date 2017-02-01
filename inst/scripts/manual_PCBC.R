@@ -1,5 +1,6 @@
 templates <- c("webAccess"="../webAccess.Rmd", 
-               "downloads"="../downloads.Rmd")
+               "downloads"="../downloads.Rmd",
+               "report"="../report.Rmd")
 
 projectId <- 'syn1773109'
 myParams <- list(projectId=projectId, 
@@ -7,14 +8,21 @@ myParams <- list(projectId=projectId,
                  aclTeamOrder=c(2224090, 3319054, 273957, projectId), 
                  useTeamGrouping=FALSE)
 
-reportType <- "webAccess"
+reportType <- "report"
+
 rmarkdown::render(input=templates[[reportType]],
                   output_file=paste0(myParams[['projectId']], "_", reportType, "_",
                                      lubridate::today(), ".html"),
                   params = myParams)
 
-reportType <- 'downloads'
-rmarkdown::render(input=templates[[reportType]],
-                  output_file=paste0(myParams[['projectId']], "_", reportType, "_",
-                                     lubridate::today(), ".html"),
-                  params = myParams)
+# reportType <- "webAccess"
+# rmarkdown::render(input=templates[[reportType]],
+#                   output_file=paste0(myParams[['projectId']], "_", reportType, "_",
+#                                      lubridate::today(), ".html"),
+#                   params = myParams)
+
+# reportType <- 'downloads'
+# rmarkdown::render(input=templates[[reportType]],
+#                   output_file=paste0(myParams[['projectId']], "_", reportType, "_",
+#                                      lubridate::today(), ".html"),
+#                   params = myParams)

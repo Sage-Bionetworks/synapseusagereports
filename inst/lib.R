@@ -1,3 +1,5 @@
+library(lubridate)
+
 # Theme for plots
 mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(size=16),
                                                 axis.title.x=ggplot2::element_text(size=18),
@@ -8,19 +10,34 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 
 # doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
 #   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
-doQuery <- function(con, template, projectId, month, year) {
-  q.browse <- sprintf(template, projectId, month, year)
 
-  data <- DBI::dbGetQuery(conn = con, statement=q.browse) %>% 
+doQuery <- function(con, template, projectId, date) {
+  message(sprintf("%s", date))
+  q.browse <- sprintf(template, projectId, date, date %m+% months(1))
+
+  DBI::dbGetQuery(conn = con, statement=q.browse) %>% 
     dplyr::rename(userid=USER_ID, id=ENTITY_ID)
   
-  data %>% 
-    # dplyr::filter(RESPONSE_STATUS == 200)  %>% 
-    dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME) %>% 
-    dplyr::ungroup() %>%
-    rename(duplicateCount=n)
+}
+
+processQuery <- function(data) {
+
+  queryData <- data %>% 
+    dplyr::select(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>% 
+    # dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>% 
+    # dplyr::ungroup() %>%
+    # rename(duplicateCount=n) %>%
+    dplyr::mutate(date=as.Date(as.character(DATE)),
+                  userId=as.character(userid), 
+                  dateGrouping=lubridate::floor_date(date, unit="month"),
+                  monthYear=paste(lubridate::month(dateGrouping, label=TRUE),
+                                  lubridate::year(dateGrouping))) %>%  
+    dplyr::group_by(id, userid, TIMESTAMP, recordType) %>% # Get unique due to name changes, might not be most recent name!
+    dplyr::arrange(TIMESTAMP) %>% 
+    dplyr::slice(1) %>% 
+    dplyr::ungroup()
   
-  
+  queryData
 }
 
 getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
@@ -43,32 +60,32 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
                                         function (x) doQuery(con=con,
                                           template=qTemplate, 
                                           projectId=projectId, 
-                                          month=x$month,
-                                          year=x$year))
+					  date=x$date))
   # beginTimestamp=x$beginTime, 
   # endTimestamp=x$endTime))
 
-  queryData <- res %>%
-    dplyr::mutate(date=as.Date(as.character(DATE)),
-                  userId=as.character(userid), 
-                  dateGrouping=lubridate::floor_date(date, unit="month"),
-                  monthYear=paste(lubridate::month(dateGrouping, label=TRUE),
-                                  lubridate::year(dateGrouping)))
-  
-  # Get unique due to folder, file name changes
-  # Might not be most recent name!
-  queryData <- queryData %>% 
-    dplyr::group_by(id, userid, TIMESTAMP) %>% 
-    dplyr::slice(1) %>% 
-    dplyr::ungroup()
-  
-  queryData
+  res
 }
 
 getTeamMemberDF <- function(teamId) {
-  userListREST <- synapseClient::synRestGET(sprintf("/teamMembers/%s?limit=500", teamId))
-  userList <- plyr::ldply(userListREST$results,
-                          function(x) data.frame(userId=as.character(x$member$ownerId), 
+  
+  totalNumberOfResults <- 1000
+  offset <- 0
+  limit <- 50
+  userListREST <- list()
+  
+  while(offset<totalNumberOfResults) {
+    result <- synapseClient::synRestGET(sprintf("/teamMembers/%s?limit=%s&offset=%s", teamId, limit, offset))
+    
+    totalNumberOfResults <- result$totalNumberOfResults
+    
+    userListREST <- c(userListREST, result$results)
+    
+    offset <- offset + limit
+  }
+
+  userList <- plyr::ldply(userListREST,
+                          function(x) data.frame(userId=as.character(x$member$ownerId),
                                                  teamId=as.character(x$teamId)))
   userList
 }
