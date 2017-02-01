@@ -68,9 +68,24 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
 }
 
 getTeamMemberDF <- function(teamId) {
-  userListREST <- synapseClient::synRestGET(sprintf("/teamMembers/%s?limit=500", teamId))
-  userList <- plyr::ldply(userListREST$results,
-                          function(x) data.frame(userId=as.character(x$member$ownerId), 
+  
+  totalNumberOfResults <- 1000
+  offset <- 0
+  limit <- 50
+  userListREST <- list()
+  
+  while(offset<totalNumberOfResults) {
+    result <- synapseClient::synRestGET(sprintf("/teamMembers/%s?limit=%s&offset=%s", teamId, limit, offset))
+    
+    totalNumberOfResults <- result$totalNumberOfResults
+    
+    userListREST <- c(userListREST, result$results)
+    
+    offset <- offset + limit
+  }
+
+  userList <- plyr::ldply(userListREST,
+                          function(x) data.frame(userId=as.character(x$member$ownerId),
                                                  teamId=as.character(x$teamId)))
   userList
 }
