@@ -95,11 +95,13 @@ aclToMemberList <- function(acl) {
                                function(x) data.frame(principalId=as.character(x@principalId),
                                                       teamId=acl@id))
   
-  userGroupHeaders <- synapseClient::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s", 
-                                                        paste(aclMemberList$principalId, 
-                                                              collapse=",")))
+  accessUsers <- plyr::llply(chunk(aclMemberList$principalId, 50),
+                             function(x) synapseClient::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
+                                                                           paste(x, collapse=",")))$children)
   
-  plyr::ldply(userGroupHeaders$children, as.data.frame)
+  userGroupHeaders <- do.call(c, accessUsers)
+  
+  plyr::ldply(userGroupHeaders, as.data.frame)
   
 }
 
