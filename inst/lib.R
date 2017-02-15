@@ -136,36 +136,42 @@ processAclUserList <- function(projectId, aclTeamOrder) {
   aclUserList
 }
 
+chunk <- function(d, n) split(d, ceiling(seq_along(d)/n))
+
 getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
   # Get user profile info for users in data download records
-  accessUsers <- synapseClient::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s", 
-                                                   paste(unique(queryData$userId), 
-                                                         collapse=",")))
-  
-  allUsersList <- plyr::ldply(accessUsers$children, as.data.frame) %>% 
-    dplyr::mutate(userId=ownerId) %>% 
+
+
+  accessUsers <- plyr::llply(chunk(unique(queryData$userId), 50),
+                             function(x) synapseClient::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
+                                                                           paste(x, collapse=",")))$children)
+
+  accessUsersChildren <- do.call(c, accessUsers)
+
+  allUsersList <- plyr::ldply(accessUsersChildren, as.data.frame) %>%
+    dplyr::mutate(userId=ownerId) %>%
     dplyr::select(userId, userName)
-  
+
   if (useTeamGrouping) {
     allUsers <- dplyr::left_join(allUsersList, aclUserList)
   } else{
     allUsers <- allUsersList
     allUsers$teamId <- "Registered Synapse User"
   }
-  
+
   allUsers$teamId <- forcats::fct_expand(factor(allUsers$teamId), "Anonymous", "Registered Synapse User")
   allUsers$teamId[is.na(allUsers$teamId)] <- "Registered Synapse User"
   allUsers$teamId[allUsers$userId == "273950"] <- "Anonymous"
-  
+
   if (useTeamGrouping) {
-    teamInfo <- plyr::ddply(allUsers %>% 
+    teamInfo <- plyr::ddply(allUsers %>%
                               dplyr::filter(teamId != "Registered Synapse User", teamId != "Anonymous",
-                                            !startsWith(as.character(allUsers$teamId), 
+                                            !startsWith(as.character(allUsers$teamId),
                                                         "syn")) %>%
                               dplyr::select(teamId) %>% dplyr::distinct(),
                       plyr::.(teamId),
                       function(x) {
-                        tmp <- synapseClient::synRestGET(sprintf("/team/%s", x$teamId)); 
+                        tmp <- synapseClient::synRestGET(sprintf("/team/%s", x$teamId));
                         data.frame(teamId=x$teamId, teamName=tmp$name)
                       }
     )
@@ -177,15 +183,15 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
   } else {
     allUsers$teamName <- "Registered Synapse User"
   }
-  
+
   allUsers$teamName <- forcats::fct_expand(factor(allUsers$teamName), "Registered Synapse User")
   naTeamNames <- is.na(allUsers$teamName)
-  
+
   allUsers$teamName <- forcats::fct_expand(allUsers$teamName,
                                            as.character(allUsers$teamId[naTeamNames]))
-  
+
   allUsers$teamName[naTeamNames] <- allUsers$teamId[naTeamNames]
-  
+
   allUsers
 }
 
