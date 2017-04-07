@@ -29,9 +29,9 @@ knitr::opts_chunk$set(
   tidy = FALSE,
   fig.width=20)
 
-qPageviewTemplate <- 'select CLIENT,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS.%s NODE where AR.RESPONSE_STATUS=200 AND AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID AND N.ID = NODE.ID and N.TIMESTAMP = NODE.TIMESTAMP and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/bundle", "GET /entity/#/version/#/bundle", "GET /entity/#/wiki2", "GET /entity/#/wiki2/#"));'
+qPageviewTemplate <- 'select CLIENT,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.RESPONSE_STATUS=200 AND AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID AND N.ID = NODE.ID and N.TIMESTAMP = NODE.TIMESTAMP and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/bundle", "GET /entity/#/version/#/bundle", "GET /entity/#/wiki2", "GET /entity/#/wiki2/#"));'
 
-qDownloadTemplate <- 'select CLIENT,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS.%s NODE where AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 and (AR.RESPONSE_STATUS IN (200, 307)) AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID AND N.TIMESTAMP = NODE.TIMESTAMP and (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/file", "GET /entity/#/version/#/file"));'
+qDownloadTemplate <- 'select CLIENT,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 and (AR.RESPONSE_STATUS IN (200, 307)) AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID AND N.TIMESTAMP = NODE.TIMESTAMP and (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/file", "GET /entity/#/version/#/file"));'
 
 
 ```
@@ -64,7 +64,7 @@ queryDataPageviews <- getData(con=con, qTemplate=qPageviewTemplate,
 
 queryDataPageviewsProcessed <- processQuery(queryDataPageviews)
 
-foo <- DBI::dbSendQuery(conn=con, statement=sprintf('DROP TABLE PROJECT_STATS.%s;', projectId))
+foo <- DBI::dbSendQuery(conn=con, statement=sprintf('DROP TABLE PROJECT_STATS;'))
 
 queryDataDownloads <- getData(con=con, qTemplate=qDownloadTemplate, 
                               projectId=projectId,
@@ -123,6 +123,26 @@ queryData %>%
 ```
 
 There are `r length(setdiff(unique(queryData$userName), c("anonymous")))` active registered Synapse users in this time period. Of these, `r multiMonthVisits(queryData) %>% nrow` users were active in the project in at least two different months.
+
+```{r}
+projectPageViews <- queryData %>% filter(recordType=='pageview', NODE_TYPE=='project', id==projectId)
+
+if (useTeamGrouping) {
+  projectPageViewsCount <- projectPageViews %>%
+    dplyr::filter(recordType == 'pageview') %>% 
+    dplyr::count(teamName, dateGrouping) %>% 
+    reshape2::dcast(teamName ~ dateGrouping, fun.aggregate = sum)
+} else {
+  projectPageViewsCount <- projectPageViews %>%
+    dplyr::filter(recordType == 'pageview') %>% 
+    dplyr::mutate(teamName='All') %>% 
+    dplyr::count(teamName, dateGrouping) %>% 
+    reshape2::dcast(teamName ~ dateGrouping)
+}
+
+projectPageViewsCount %>% knitr::kable()
+
+```
 
 #### Page views per month
 ```{r loadpermonth, include=TRUE, eval=TRUE}

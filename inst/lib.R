@@ -13,7 +13,7 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 
 doQuery <- function(con, template, projectId, date) {
   message(sprintf("%s", date))
-  q.browse <- sprintf(template, projectId, date, date %m+% months(1))
+  q.browse <- sprintf(template, date, date %m+% months(1))
 
   DBI::dbGetQuery(conn = con, statement=q.browse) %>% 
     dplyr::rename(userid=USER_ID, id=ENTITY_ID)
@@ -51,9 +51,9 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
   #                                              maxDate, maxDate,
   #                                              maxDate))
   # 
-  q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS.%s SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
+  q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
   create <- DBI::dbSendQuery(conn=con,
-                             statement=sprintf(q.create_temp, projectId, projectId))
+                             statement=sprintf(q.create_temp, projectId))
   
   #res <- plyr::ddply(timestampBreaksDf, plyr::.(beginTime, endTime),
   res <- plyr::ddply(timestampBreaksDf, plyr::.(month, year),
