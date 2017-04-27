@@ -13,7 +13,7 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 
 doQuery <- function(con, template, projectId, date) {
   message(sprintf("%s", date))
-  q.browse <- sprintf(template, projectId, date, date %m+% months(1))
+  q.browse <- sprintf(template, date, date %m+% months(1))
 
   DBI::dbGetQuery(conn = con, statement=q.browse)
   
