@@ -61,6 +61,7 @@ queryDataPageviews <- getData(con=con, qTemplate=qPageviewTemplate,
                               projectId=projectId,
                               timestampBreaksDf=timestampBreaksDf)
 
+
 queryDataPageviewsProcessed <- queryDataPageviews %>% 
   dplyr::mutate(recordType='pageview') %>% 
   processQuery()
@@ -123,6 +124,26 @@ queryData %>%
 ```
 
 There are `r length(setdiff(unique(queryData$userName), c("anonymous")))` active registered Synapse users in this time period. Of these, `r multiMonthVisits(queryData) %>% nrow` users were active in the project in at least two different months.
+
+```{r}
+projectPageViews <- queryData %>% filter(recordType=='pageview', NODE_TYPE=='project', id==projectId)
+
+if (useTeamGrouping) {
+  projectPageViewsCount <- projectPageViews %>%
+    dplyr::filter(recordType == 'pageview') %>% 
+    dplyr::count(teamName, dateGrouping) %>% 
+    reshape2::dcast(teamName ~ dateGrouping, fun.aggregate = sum)
+} else {
+  projectPageViewsCount <- projectPageViews %>%
+    dplyr::filter(recordType == 'pageview') %>% 
+    dplyr::mutate(teamName='All') %>% 
+    dplyr::count(teamName, dateGrouping) %>% 
+    reshape2::dcast(teamName ~ dateGrouping)
+}
+
+projectPageViewsCount %>% knitr::kable()
+
+```
 
 #### Page views per month
 ```{r loadpermonth, include=TRUE, eval=TRUE}
