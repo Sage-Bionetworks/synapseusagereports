@@ -15,14 +15,14 @@ doQuery <- function(con, template, projectId, date) {
   message(sprintf("%s", date))
   q.browse <- sprintf(template, date, date %m+% months(1))
 
-  DBI::dbGetQuery(conn = con, statement=q.browse) %>% 
-    dplyr::rename(userid=USER_ID, id=ENTITY_ID)
+  DBI::dbGetQuery(conn = con, statement=q.browse)
   
 }
 
 processQuery <- function(data) {
 
   queryData <- data %>% 
+    dplyr::rename(userid=USER_ID, id=ENTITY_ID) %>% 
     dplyr::select(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>% 
     # dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>% 
     # dplyr::ungroup() %>%
@@ -44,26 +44,18 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
 
   maxDate <- max(timestampBreaksDf$date)
   
-  # q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS.%s SELECT DISTINCT ID, TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s AND TIMESTAMP < UNIX_TIMESTAMP('%s')*1000 GROUP BY ID HAVING UNIX_TIMESTAMP('%s')*1000 - TIMESTAMP = MIN(UNIX_TIMESTAMP('%s')*1000 - TIMESTAMP)"
-  # create <- DBI::dbSendQuery(conn=con,
-  #                            statement=sprintf(q.create_temp, projectId,
-  #                                              projectId, maxDate,
-  #                                              maxDate, maxDate,
-  #                                              maxDate))
-  # 
   q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
   create <- DBI::dbSendQuery(conn=con,
                              statement=sprintf(q.create_temp, projectId))
   
-  #res <- plyr::ddply(timestampBreaksDf, plyr::.(beginTime, endTime),
   res <- plyr::ddply(timestampBreaksDf, plyr::.(month, year),
-                                        function (x) doQuery(con=con,
+                     function (x) doQuery(con=con,
                                           template=qTemplate, 
                                           projectId=projectId, 
 					  date=x$date))
-  # beginTimestamp=x$beginTime, 
-  # endTimestamp=x$endTime))
-
+  
+  foo <- DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS;')
+  
   res
 }
 
