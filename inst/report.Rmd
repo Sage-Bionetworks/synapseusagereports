@@ -50,7 +50,7 @@ con <- dbConnect(MySQL(),
                  host = config$host,
                  dbname='warehouse')
 
-timestampBreaksDf <- makeDateBreaks(nMonths)
+timestampBreaksDf <- makeDateBreaks(nMonths) %>% dplyr::arrange(date)
 
 proj <- synGet(params$projectId)
 
@@ -59,19 +59,19 @@ proj <- synGet(params$projectId)
 ```{r domysqlquery}
 queryDataPageviews <- getData(con=con, qTemplate=qPageviewTemplate, 
                               projectId=projectId,
-                              timestampBreaksDf=timestampBreaksDf) %>% 
-  dplyr::mutate(recordType='pageview')
+                              timestampBreaksDf=timestampBreaksDf)
 
-queryDataPageviewsProcessed <- processQuery(queryDataPageviews)
-
-foo <- DBI::dbSendQuery(conn=con, statement=sprintf('DROP TABLE PROJECT_STATS.%s;', projectId))
+queryDataPageviewsProcessed <- queryDataPageviews %>% 
+  dplyr::mutate(recordType='pageview') %>% 
+  processQuery()
 
 queryDataDownloads <- getData(con=con, qTemplate=qDownloadTemplate, 
                               projectId=projectId,
-                              timestampBreaksDf=timestampBreaksDf) %>% 
-  dplyr::mutate(recordType='download')
+                              timestampBreaksDf=timestampBreaksDf)
 
-queryDataDownloadsProcessed <- processQuery(queryDataDownloads)
+queryDataDownloadsProcessed <- queryDataDownloads %>% 
+  dplyr::mutate(recordType='download') %>% 
+  processQuery()
 
 queryData <- rbind(queryDataPageviewsProcessed, queryDataDownloadsProcessed)
 
