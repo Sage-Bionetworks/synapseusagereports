@@ -1,67 +1,99 @@
+library(lubridate)
+
 # Theme for plots
 mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(size=16),
                                                 axis.title.x=ggplot2::element_text(size=18),
                                                 axis.title.y=ggplot2::element_text(size=18, angle=90))
 
-queryDict <- c('downloads'='select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,AR.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");',
-               'webAccess'='select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");')
+# queryDict <- c('downloads'='select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,AR.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");',
+#                'webAccess'='select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");')
 
-doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
-  q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
-  
-  data <- DBI::dbGetQuery(conn = con, statement=q.browse) %>% 
-    dplyr::rename(userid=USER_ID, id=ENTITY_ID)
-  
-  data %>% dplyr::filter(RESPONSE_STATUS == 200)  %>% 
-    dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME) %>% 
-    dplyr::ungroup()
+# doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
+#   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
+
+doQuery <- function(con, template, projectId, date) {
+  message(sprintf("%s", date))
+  q.browse <- sprintf(template, date, date %m+% months(1))
+
+  DBI::dbGetQuery(conn = con, statement=q.browse)
   
 }
 
-getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
-  
-  res <- plyr::ddply(timestampBreaksDf, .(beginTime, endTime),
-                     function (x) doQuery(con=con,
-                                          template=qTemplate, 
-                                          projectId=projectId, 
-                                          beginTimestamp=x$beginTime, 
-                                          endTimestamp=x$endTime))
-  
-  queryData <- res %>%
+processQuery <- function(data) {
+
+  queryData <- data %>% 
+    dplyr::rename(userid=USER_ID, id=ENTITY_ID) %>% 
+    dplyr::select(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>% 
+    # dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>% 
+    # dplyr::ungroup() %>%
+    # rename(duplicateCount=n) %>%
     dplyr::mutate(date=as.Date(as.character(DATE)),
                   userId=as.character(userid), 
                   dateGrouping=lubridate::floor_date(date, unit="month"),
                   monthYear=paste(lubridate::month(dateGrouping, label=TRUE),
-                                  lubridate::year(dateGrouping)))
-  
-  # Get unique due to folder, file name changes
-  # Might not be most recent name!
-  queryData <- queryData %>% 
-    dplyr::group_by(id, userid, TIMESTAMP) %>% 
+                                  lubridate::year(dateGrouping))) %>%  
+    dplyr::group_by(id, userid, TIMESTAMP, recordType) %>% # Get unique due to name changes, might not be most recent name!
+    dplyr::arrange(TIMESTAMP) %>% 
     dplyr::slice(1) %>% 
     dplyr::ungroup()
   
   queryData
 }
 
+getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
+
+  maxDate <- max(timestampBreaksDf$date)
+  
+  q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
+  create <- DBI::dbSendQuery(conn=con,
+                             statement=sprintf(q.create_temp, projectId))
+  
+  res <- plyr::ddply(timestampBreaksDf, plyr::.(month, year),
+                     function (x) doQuery(con=con,
+                                          template=qTemplate, 
+                                          projectId=projectId, 
+					  date=x$date))
+  
+  foo <- DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS;')
+  
+  res
+}
+
 getTeamMemberDF <- function(teamId) {
-  userListREST <- synapseClient::synRestGET(sprintf("/teamMembers/%s?limit=500", teamId))
-  userList <- plyr::ldply(userListREST$results,
-                          function(x) data.frame(userId=as.character(x$member$ownerId), 
+  
+  totalNumberOfResults <- 1000
+  offset <- 0
+  limit <- 50
+  userListREST <- list()
+  
+  while(offset<totalNumberOfResults) {
+    result <- synapseClient::synRestGET(sprintf("/teamMembers/%s?limit=%s&offset=%s", teamId, limit, offset))
+    
+    totalNumberOfResults <- result$totalNumberOfResults
+    
+    userListREST <- c(userListREST, result$results)
+    
+    offset <- offset + limit
+  }
+
+  userList <- plyr::ldply(userListREST,
+                          function(x) data.frame(userId=as.character(x$member$ownerId),
                                                  teamId=as.character(x$teamId)))
   userList
 }
 
 aclToMemberList <- function(acl) {
-  aclMemberList <- ldply(acl@resourceAccess@content, 
-                         function(x) data.frame(principalId=as.character(x@principalId),
-                                                teamId=acl@id))
+  aclMemberList <- plyr::ldply(acl@resourceAccess@content, 
+                               function(x) data.frame(principalId=as.character(x@principalId),
+                                                      teamId=acl@id))
   
-  userGroupHeaders <- synapseClient::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s", 
-                                                        paste(aclMemberList$principalId, 
-                                                              collapse=",")))
+  accessUsers <- plyr::llply(chunk(aclMemberList$principalId, 50),
+                             function(x) synapseClient::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
+                                                                           paste(x, collapse=",")))$children)
   
-  plyr::ldply(userGroupHeaders$children, as.data.frame)
+  userGroupHeaders <- do.call(c, accessUsers)
+  
+  plyr::ldply(userGroupHeaders, as.data.frame)
   
 }
 
@@ -98,56 +130,62 @@ processAclUserList <- function(projectId, aclTeamOrder) {
   aclUserList
 }
 
+chunk <- function(d, n) split(d, ceiling(seq_along(d)/n))
+
 getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
   # Get user profile info for users in data download records
-  accessUsers <- synapseClient::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s", 
-                                                   paste(unique(queryData$userId), 
-                                                         collapse=",")))
-  
-  allUsersList <- plyr::ldply(accessUsers$children, as.data.frame) %>% 
-    dplyr::mutate(userId=ownerId) %>% 
+
+
+  accessUsers <- plyr::llply(chunk(unique(queryData$userId), 50),
+                             function(x) synapseClient::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
+                                                                           paste(x, collapse=",")))$children)
+
+  accessUsersChildren <- do.call(c, accessUsers)
+
+  allUsersList <- plyr::ldply(accessUsersChildren, as.data.frame) %>%
+    dplyr::mutate(userId=ownerId) %>%
     dplyr::select(userId, userName)
-  
+
   if (useTeamGrouping) {
     allUsers <- dplyr::left_join(allUsersList, aclUserList)
   } else{
     allUsers <- allUsersList
-    allUsers$teamId <- "None"
+    allUsers$teamId <- "Registered Synapse User"
   }
-  
-  allUsers$teamId <- forcats::fct_expand(factor(allUsers$teamId), "Anonymous", "None")
-  allUsers$teamId[is.na(allUsers$teamId)] <- "None"
+
+  allUsers$teamId <- forcats::fct_expand(factor(allUsers$teamId), "Anonymous", "Registered Synapse User")
+  allUsers$teamId[is.na(allUsers$teamId)] <- "Registered Synapse User"
   allUsers$teamId[allUsers$userId == "273950"] <- "Anonymous"
-  
+
   if (useTeamGrouping) {
-    teamInfo <- plyr::ddply(allUsers %>% 
-                              dplyr::filter(teamId != "None", teamId != "Anonymous",
-                                            !startsWith(as.character(allUsers$teamId), 
+    teamInfo <- plyr::ddply(allUsers %>%
+                              dplyr::filter(teamId != "Registered Synapse User", teamId != "Anonymous",
+                                            !startsWith(as.character(allUsers$teamId),
                                                         "syn")) %>%
-                              dplyr::select(teamId) %>% dplyr::unique(),
-                      .(teamId),
+                              dplyr::select(teamId) %>% dplyr::distinct(),
+                      plyr::.(teamId),
                       function(x) {
-                        tmp <- synapseClient::synRestGET(sprintf("/team/%s", x$teamId)); 
+                        tmp <- synapseClient::synRestGET(sprintf("/team/%s", x$teamId));
                         data.frame(teamId=x$teamId, teamName=tmp$name)
                       }
     )
     if (nrow(teamInfo) > 0) {
       allUsers <- dplyr::left_join(allUsers, teamInfo, by="teamId")
     } else {
-      allUsers$teamName <- "None"
+      allUsers$teamName <- "Registered Synapse User"
     }
   } else {
-    allUsers$teamName <- "None"
+    allUsers$teamName <- "Registered Synapse User"
   }
-  
-  allUsers$teamName <- forcats::fct_expand(factor(allUsers$teamName), "None")
+
+  allUsers$teamName <- forcats::fct_expand(factor(allUsers$teamName), "Registered Synapse User")
   naTeamNames <- is.na(allUsers$teamName)
-  
+
   allUsers$teamName <- forcats::fct_expand(allUsers$teamName,
                                            as.character(allUsers$teamId[naTeamNames]))
-  
+
   allUsers$teamName[naTeamNames] <- allUsers$teamId[naTeamNames]
-  
+
   allUsers
 }
 
@@ -166,8 +204,8 @@ countByMonth <- function(queryData, useTeamGrouping) {
 
 countByDay <- function(queryData, useTeamGrouping) {
   tmp <- queryData
-
-    if (!useTeamGrouping) {
+  
+  if (!useTeamGrouping) {
     tmp <- tmp %>% dplyr::mutate(teamName="All")
   }
 
@@ -231,7 +269,7 @@ firstMonthToVisit <- function(queryData) {
   
   firstMonthVisit %>% 
     dplyr::arrange(dateGrouping) %>% 
-    dplyr::rename(Date=dateGrouping, `New Users`=n)
+    dplyr::rename(Date=dateGrouping, Users=n)
 }
 
 multiMonthVisits <- function(queryData) {
@@ -242,17 +280,31 @@ multiMonthVisits <- function(queryData) {
 }
 
 makeDateBreaks <- function(nMonths) {
-  endDate <- lubridate::floor_date(lubridate::today(), "month") + lubridate::seconds(1)
-  endTimestamp <- as.numeric(lubridate::floor_date(endDate, "second")) * 1000
+  thisDate <- lubridate::floor_date(lubridate::today(), "month")- lubridate::period(1, "months")
   
-  monthBreaks <- as.POSIXct(endDate - (lubridate::period(1, "months") * 0:nMonths),
-                            origin="1970-01-01")
+  beginDates <- thisDate - (lubridate::period(1, "months") * 0:(nMonths - 1))
+
+  data.frame(date=beginDates, month=lubridate::month(beginDates), year=lubridate::year(beginDates))
+    # # endDates <- beginDates + (lubridate::days_in_month(beginDates)) - lubridate::seconds(1)
+  # # beginDates <- beginDates + lubridate::seconds(1)
+  # 
+  # monthBreaksDf <- data.frame(beginDate=beginDates, endDate=endDates)
+  # 
+  # monthBreaksDf %>% 
+  #   dplyr::mutate(beginTime=as.numeric(beginDate) * 1000,
+  #                 endTime=as.numeric(endDate) * 1000)
   
-  monthBreaksDf <- data.frame(beginDate=monthBreaks[2:(nMonths + 1)],
-                              endDate=monthBreaks[1:nMonths])
+}
+
+topNEntities <- function(queryData, allUsers, topN=20) {
+  plotdata <- queryData %>%
+    dplyr::count(userName) %>%
+    dplyr::ungroup() %>% 
+    dplyr::left_join(allUsers) %>% 
+    dplyr::mutate(userName=reorder(userName, n, ordered=TRUE))
   
-  monthBreaksDf %>% 
-    dplyr::mutate(beginTime=as.numeric(beginDate) * 1000,
-                  endTime=as.numeric(endDate) * 1000)
-  
+  plotdata %>% 
+    dplyr::top_n(topN, n) %>% 
+    dplyr::arrange(-n) %>% 
+    dplyr::select(n)
 }
