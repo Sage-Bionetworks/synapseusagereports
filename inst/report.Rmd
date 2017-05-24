@@ -212,6 +212,7 @@ tmp <- queryData %>%
   dplyr::count(id, NAME, NODE_TYPE) %>% 
   dplyr::filter(n >= 5, !stringr::str_detect(id, "acl"))
 
+if (nrow(tmp) > 0) {
 dataaccessCount1 <- queryData %>% 
   dplyr::filter(recordType == 'download') %>% 
   dplyr::filter(id %in% tmp$id) %>% 
@@ -236,4 +237,5 @@ dataaccessCount <- dataaccessCount1 %>% left_join(dataaccessCount2, by=c("id", "
   dplyr::select(name, everything(), total, -id, -NAME)
 
 dataaccessCount %>% DT::datatable(options=list(pageLength=20), escape=1)
+}
 ```
