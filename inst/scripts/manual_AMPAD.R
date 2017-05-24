@@ -13,16 +13,15 @@ reportType <- "report"
 parentId <- 'syn8457451'
 
 myParams <- list(projectId=projectId, 
-                 nMonths=29,
+                 nMonths=30,
                  aclTeamOrder=c(3346847, 3320424, projectId), 
                  useTeamGrouping=TRUE)
 
-
-htmlFileName <- output_file=paste0(myParams[['projectId']], "_", reportType, "_",
-                                     lubridate::today(), ".html")
+htmlFileName <- paste0(myParams[['projectId']], "_", reportType, "_",
+                       lubridate::today(), ".html")
 
 rmarkdown::render(input=templates[[reportType]],
                   output_file=htmlFileName,
                   params = myParams)
 
-htmlFile <- synStore(File(htmlFileName, parentId=parentId))
+htmlFile <- synStore(File(paste0("../", htmlFileName), parentId=parentId))
