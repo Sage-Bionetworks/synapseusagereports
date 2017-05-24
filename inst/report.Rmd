@@ -4,7 +4,7 @@ output:
     keep_md: yes
 params:
   projectId: !r 'syn2775243'
-  nMonths: !r NULL
+  nMonths: !r NA
   useTeamGrouping: !r TRUE
   aclTeamOrder: !r c('syn2775243')
   queryDataFile: !r NA
@@ -43,7 +43,7 @@ projectId <- gsub("syn", "", params$projectId)
 proj <- synGet(params$projectId)
 
 
-if (is.null(params$nMonths)) {
+if (is.na(params$nMonths)) {
   startDate <- lubridate::as_date(proj@properties$createdOn)
   thisDate <- lubridate::floor_date(lubridate::today(), "month")
   thisDate <- thisDate - lubridate::period(1, "months")
