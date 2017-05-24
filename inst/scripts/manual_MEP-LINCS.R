@@ -1,16 +1,16 @@
-templates <- c("report"="../report.Rmd")
+library(synapseClient)
+synapseLogin()
 
-### MEP-LINCS
+templates <- c("report"="../report.Rmd")
+reportType <- "report"
+
 projectId <- 'syn2862345'
-# Store HTML file here
 parentId <- 'syn5578879'
 
 myParams <- list(projectId=projectId, 
                  nMonths=NA,
                  aclTeamOrder=c(3323597, 3330234, 3332397, projectId),
                  useTeamGrouping=TRUE)
-
-reportType <- "report"
 
 htmlFileName <- paste0(myParams[['projectId']], "_", reportType, "_",
                        lubridate::today(), ".html")

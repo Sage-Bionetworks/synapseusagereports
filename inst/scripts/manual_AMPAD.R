@@ -1,15 +1,10 @@
 library(synapseClient)
 synapseLogin()
 
-templates <- c("webAccess"="../webAccess.Rmd", 
-               "downloads"="../downloads.Rmd",
-	       "report"="../report.Rmd")
-
-### AMP-AD
-projectId <- 'syn2580853'
+templates <- c("report"="../report.Rmd")
 reportType <- "report"
 
-# Store HTML file here
+projectId <- 'syn2580853'
 parentId <- 'syn8457451'
 
 myParams <- list(projectId=projectId, 
