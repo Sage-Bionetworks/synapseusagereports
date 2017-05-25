@@ -1,19 +1,14 @@
 library(synapseClient)
 synapseLogin()
 
-templates <- c("webAccess"="../webAccess.Rmd", 
-               "downloads"="../downloads.Rmd",
-	       "report"="../report.Rmd")
-
-### AMP-AD
-projectId <- 'syn2580853'
+templates <- c("report"="../report.Rmd")
 reportType <- "report"
 
-# Store HTML file here
+projectId <- 'syn2580853'
 parentId <- 'syn8457451'
 
 myParams <- list(projectId=projectId, 
-                 nMonths=30,
+                 nMonths=NA,
                  aclTeamOrder=c(3346847, 3320424, projectId), 
                  useTeamGrouping=TRUE)
 
@@ -24,4 +19,5 @@ rmarkdown::render(input=templates[[reportType]],
                   output_file=htmlFileName,
                   params = myParams)
 
-htmlFile <- synStore(File(paste0("../", htmlFileName), parentId=parentId))
+htmlFile <- synStore(File(paste0("../", htmlFileName),
+                          parentId=parentId))

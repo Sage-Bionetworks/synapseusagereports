@@ -3,10 +3,10 @@ output:
   html_document: 
     keep_md: yes
 params:
-  projectId: !r 'syn1773109'
-  nMonths: 2
-  useTeamGrouping: TRUE
-  aclTeamOrder: !r c(2224090, 3319054, 273957, 'syn1773109')
+  projectId: !r 'syn2775243'
+  nMonths: !r NA
+  useTeamGrouping: !r TRUE
+  aclTeamOrder: !r c('syn2775243')
   queryDataFile: !r NA
 ---
 
@@ -40,7 +40,18 @@ qDownloadTemplate <- 'select CLIENT,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIM
 config <- yaml.load_file("~/datawarehouse_config.yml")
 
 projectId <- gsub("syn", "", params$projectId)
-nMonths <- params$nMonths
+proj <- synGet(params$projectId)
+
+
+if (is.na(params$nMonths)) {
+  startDate <- lubridate::as_date(proj@properties$createdOn)
+  thisDate <- lubridate::floor_date(lubridate::today(), "month")
+  thisDate <- thisDate - lubridate::period(1, "months")
+  nMonths <- interval(startDate, thisDate) %/% months(1)
+} else {
+  nMonths <- params$nMonths
+}
+
 useTeamGrouping <- params$useTeamGrouping
 aclTeamOrder <- params$aclTeamOrder
 
@@ -52,7 +63,6 @@ con <- dbConnect(MySQL(),
 
 timestampBreaksDf <- makeDateBreaks(nMonths) %>% dplyr::arrange(date)
 
-proj <- synGet(params$projectId)
 
 ```
 
@@ -125,27 +135,36 @@ queryData %>%
 
 There are `r length(setdiff(unique(queryData$userName), c("anonymous")))` active registered Synapse users in this time period. Of these, `r multiMonthVisits(queryData) %>% nrow` users were active in the project in at least two different months.
 
+## Project page views
+
+Count of the number of page views of the main project Wiki (`r params$projectId`) per month.
+
 ```{r}
 projectPageViews <- queryData %>% filter(recordType=='pageview', NODE_TYPE=='project', id==projectId)
 
-if (useTeamGrouping) {
-  projectPageViewsCount <- projectPageViews %>%
-    dplyr::filter(recordType == 'pageview') %>% 
-    dplyr::count(teamName, dateGrouping) %>% 
-    reshape2::dcast(teamName ~ dateGrouping, fun.aggregate = sum)
-} else {
-  projectPageViewsCount <- projectPageViews %>%
-    dplyr::filter(recordType == 'pageview') %>% 
-    dplyr::mutate(teamName='All') %>% 
-    dplyr::count(teamName, dateGrouping) %>% 
-    reshape2::dcast(teamName ~ dateGrouping)
+if (nrow(projectPageViews) > 0) {
+  if (useTeamGrouping) {
+    projectPageViewsCount <- projectPageViews %>%
+      dplyr::filter(recordType == 'pageview') %>% 
+      dplyr::count(teamName, dateGrouping) %>% 
+      reshape2::dcast(teamName ~ dateGrouping, fun.aggregate = sum)
+  } else {
+    projectPageViewsCount <- projectPageViews %>%
+      dplyr::filter(recordType == 'pageview') %>% 
+      dplyr::mutate(teamName='All') %>% 
+      dplyr::count(teamName, dateGrouping) %>% 
+      reshape2::dcast(teamName ~ dateGrouping)
+  }
+  
+  projectPageViewsCount %>% knitr::kable()
 }
-
-projectPageViewsCount %>% knitr::kable()
 
 ```
 
 #### Page views per month
+
+Count of the page views of any page (Wiki or entity) in the entire project per month.
+
 ```{r loadpermonth, include=TRUE, eval=TRUE}
 if (useTeamGrouping) {
   dateGroupingCount <- queryData %>%
@@ -164,13 +183,22 @@ dateGroupingCount %>% knitr::kable()
 ```
 
 #### Page views per day
+
+Plot of the page views of any page (Wiki or entity) in the entire project per day.
+
 ```{r plotperday, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 perdayCount <- countByDay(queryData %>% filter(recordType == 'pageview'), 
                           useTeamGrouping)
-plotByDay(perdayCount, useTeamGrouping)
+
+if (nrow(perdayCount) > 0) {
+  plotByDay(perdayCount, useTeamGrouping)
+}
 ```
 
-#### Entity page views (top 100 with more than 5 views)
+#### Entity page views
+
+The top 50 Files or Folders with at least 5 views.
+
 ```{r include=TRUE, eval=TRUE}
 ### Data
 tmp <- queryData %>%
@@ -178,33 +206,39 @@ tmp <- queryData %>%
   dplyr::count(id, NAME, NODE_TYPE) %>% 
   dplyr::filter(n >= 5, !stringr::str_detect(id, "acl"))
 
-dataaccessCount1 <- queryData %>% 
-  dplyr::filter(recordType == 'pageview') %>% 
-  dplyr::filter(id %in% tmp$id) %>% 
-  dplyr::count(id, NAME, NODE_TYPE, dateGrouping) %>% 
-  dplyr::ungroup() %>%
-  reshape2::dcast(id + NAME + NODE_TYPE ~ dateGrouping, value.var='n') %>% 
-  dplyr::mutate(name=sprintf("<a href='https://www.synapse.org/#!Synapse:syn%s' target='_blank'>%s</a>", id, NAME))
+if (nrow(tmp) > 0) {
+  dataaccessCount1 <- queryData %>% 
+    dplyr::filter(recordType == 'pageview') %>% 
+    dplyr::filter(id %in% tmp$id) %>% 
+    dplyr::count(id, NAME, NODE_TYPE, dateGrouping) %>% 
+    dplyr::ungroup() %>%
+    reshape2::dcast(id + NAME + NODE_TYPE ~ dateGrouping, value.var='n') %>% 
+    dplyr::mutate(name=sprintf("<a href='https://www.synapse.org/#!Synapse:syn%s' target='_blank'>%s</a>", id, NAME))
   # dplyr::mutate(name=sprintf("[%s](https://www.synapse.org/#!Synapse:syn%s)", NAME, id))
-
-
-dataaccessCount2 <- queryData %>% 
-  dplyr::filter(recordType == 'pageview') %>% 
-  dplyr::filter(id %in% tmp$id) %>% 
-  dplyr::count(id, NAME, NODE_TYPE) %>% 
-  dplyr::ungroup() %>%
-  dplyr::arrange(dplyr::desc(n))
-
-dataaccessCount <- dataaccessCount1 %>% left_join(dataaccessCount2, by=c("id", "NAME", "NODE_TYPE")) %>% 
-  dplyr::arrange(dplyr::desc(n)) %>%
-  head(50) %>% 
-  dplyr::rename(total=n) %>% 
-  dplyr::select(name, everything(), total, -id, -NAME)
-
-dataaccessCount %>% DT::datatable(options=list(pageLength=20), escape=1)
+  
+  
+  dataaccessCount2 <- queryData %>% 
+    dplyr::filter(recordType == 'pageview') %>% 
+    dplyr::filter(id %in% tmp$id) %>% 
+    dplyr::count(id, NAME, NODE_TYPE) %>% 
+    dplyr::ungroup() %>%
+    dplyr::arrange(dplyr::desc(n))
+  
+  dataaccessCount <- dataaccessCount1 %>% 
+    left_join(dataaccessCount2, by=c("id", "NAME", "NODE_TYPE")) %>% 
+    dplyr::arrange(dplyr::desc(n)) %>%
+    head(50) %>% 
+    dplyr::rename(total=n) %>% 
+    dplyr::select(name, everything(), total, -id, -NAME)
+  
+  dataaccessCount %>% DT::datatable(options=list(pageLength=20), escape=1)
+}
 ```
 
 #### Entity downloads (top 100 with more than 5 views)
+
+The top 50 Files or Folders with at least 5 views.
+
 ```{r include=TRUE, eval=TRUE}
 ### Data
 tmp <- queryData %>%
@@ -213,29 +247,30 @@ tmp <- queryData %>%
   dplyr::filter(n >= 5, !stringr::str_detect(id, "acl"))
 
 if (nrow(tmp) > 0) {
-dataaccessCount1 <- queryData %>% 
-  dplyr::filter(recordType == 'download') %>% 
-  dplyr::filter(id %in% tmp$id) %>% 
-  dplyr::count(id, NAME, NODE_TYPE, dateGrouping) %>% 
-  dplyr::ungroup() %>%
-  reshape2::dcast(id + NAME + NODE_TYPE ~ dateGrouping, value.var='n') %>% 
-  dplyr::mutate(name=sprintf("<a href='https://www.synapse.org/#!Synapse:syn%s' target='_blank'>%s</a>", id, NAME))
+  dataaccessCount1 <- queryData %>% 
+    dplyr::filter(recordType == 'download') %>% 
+    dplyr::filter(id %in% tmp$id) %>% 
+    dplyr::count(id, NAME, NODE_TYPE, dateGrouping) %>% 
+    dplyr::ungroup() %>%
+    reshape2::dcast(id + NAME + NODE_TYPE ~ dateGrouping, value.var='n') %>% 
+    dplyr::mutate(name=sprintf("<a href='https://www.synapse.org/#!Synapse:syn%s' target='_blank'>%s</a>", id, NAME))
   # dplyr::mutate(name=sprintf("[%s](https://www.synapse.org/#!Synapse:syn%s)", NAME, id))
-
-
-dataaccessCount2 <- queryData %>% 
-  dplyr::filter(recordType == 'download') %>% 
-  dplyr::filter(id %in% tmp$id) %>% 
-  dplyr::count(id, NAME, NODE_TYPE) %>% 
-  dplyr::ungroup() %>%
-  dplyr::arrange(dplyr::desc(n))
-
-dataaccessCount <- dataaccessCount1 %>% left_join(dataaccessCount2, by=c("id", "NAME", "NODE_TYPE")) %>% 
-  dplyr::arrange(dplyr::desc(n)) %>%
-  head(50) %>% 
-  dplyr::rename(total=n) %>% 
-  dplyr::select(name, everything(), total, -id, -NAME)
-
-dataaccessCount %>% DT::datatable(options=list(pageLength=20), escape=1)
+  
+  
+  dataaccessCount2 <- queryData %>% 
+    dplyr::filter(recordType == 'download') %>% 
+    dplyr::filter(id %in% tmp$id) %>% 
+    dplyr::count(id, NAME, NODE_TYPE) %>% 
+    dplyr::ungroup() %>%
+    dplyr::arrange(dplyr::desc(n))
+  
+  dataaccessCount <- dataaccessCount1 %>% 
+    left_join(dataaccessCount2, by=c("id", "NAME", "NODE_TYPE")) %>% 
+    dplyr::arrange(dplyr::desc(n)) %>%
+    head(50) %>% 
+    dplyr::rename(total=n) %>% 
+    dplyr::select(name, everything(), total, -id, -NAME)
+  
+  dataaccessCount %>% DT::datatable(options=list(pageLength=20), escape=1)
 }
 ```
