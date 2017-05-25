@@ -135,6 +135,10 @@ queryData %>%
 
 There are `r length(setdiff(unique(queryData$userName), c("anonymous")))` active registered Synapse users in this time period. Of these, `r multiMonthVisits(queryData) %>% nrow` users were active in the project in at least two different months.
 
+## Project page views
+
+Count of the number of page views of the main project Wiki (`r params$projectId`) per month.
+
 ```{r}
 projectPageViews <- queryData %>% filter(recordType=='pageview', NODE_TYPE=='project', id==projectId)
 
