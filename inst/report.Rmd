@@ -162,6 +162,9 @@ if (nrow(projectPageViews) > 0) {
 ```
 
 #### Page views per month
+
+Count of the page views of any page (Wiki or entity) in the entire project per month.
+
 ```{r loadpermonth, include=TRUE, eval=TRUE}
 if (useTeamGrouping) {
   dateGroupingCount <- queryData %>%
@@ -180,6 +183,9 @@ dateGroupingCount %>% knitr::kable()
 ```
 
 #### Page views per day
+
+Plot of the page views of any page (Wiki or entity) in the entire project per day.
+
 ```{r plotperday, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
 perdayCount <- countByDay(queryData %>% filter(recordType == 'pageview'), 
                           useTeamGrouping)
@@ -189,7 +195,10 @@ if (nrow(perdayCount) > 0) {
 }
 ```
 
-#### Entity page views (top 100 with more than 5 views)
+#### Entity page views
+
+The top 50 Files or Folders with at least 5 views.
+
 ```{r include=TRUE, eval=TRUE}
 ### Data
 tmp <- queryData %>%
@@ -227,6 +236,9 @@ if (nrow(tmp) > 0) {
 ```
 
 #### Entity downloads (top 100 with more than 5 views)
+
+The top 50 Files or Folders with at least 5 views.
+
 ```{r include=TRUE, eval=TRUE}
 ### Data
 tmp <- queryData %>%
