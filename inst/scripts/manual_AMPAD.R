@@ -1,23 +1,28 @@
 library(synapseClient)
+library(synapseProjectUsageStatistics)
+
 synapseLogin()
 
-templates <- c("report"="../report.Rmd")
+templates <- c("report"=system.file("templates", "report.Rmd",
+                                    package = "synapseProjectUsageStatistics"))
 reportType <- "report"
 
 projectId <- 'syn2580853'
 parentId <- 'syn8457451'
 
-myParams <- list(projectId=projectId, 
+myParams <- list(projectId=projectId,
                  nMonths=NA,
-                 aclTeamOrder=c(3346847, 3320424, projectId), 
+                 aclTeamOrder=c(3346847, 3320424, projectId),
                  useTeamGrouping=TRUE)
 
 htmlFileName <- paste0(myParams[['projectId']], "_", reportType, "_",
                        lubridate::today(), ".html")
 
-rmarkdown::render(input=templates[[reportType]],
-                  output_file=htmlFileName,
-                  params = myParams)
+outputFileName <- paste0(tempdir(), "/", htmlFileName)
 
-htmlFile <- synStore(File(paste0("../", htmlFileName),
-                          parentId=parentId))
+rmarkdown::render(input=templates[[reportType]],
+                  output_file=outputFileName,
+                  params=myParams)
+
+htmlFile <- synStore(File(outputFileName,
+                          name="Usage Statistics", parentId=parentId))
