@@ -12,6 +12,8 @@ Imports:
   dplyr,
   RMySQL,
   yaml,
-  lubridate
+  lubridate,
+  rmarkdown,
+  knitr
 Remotes:
   Sage-Bionetworks/rSynapseClient
