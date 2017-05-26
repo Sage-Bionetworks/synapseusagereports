@@ -8,6 +8,7 @@ params:
   useTeamGrouping: !r TRUE
   aclTeamOrder: !r c('syn2775243')
   queryDataFile: !r NA
+  databaseConfigFile: "~/datawarehouse_config.yml"
 ---
 
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
@@ -15,6 +16,7 @@ library(dplyr)
 library(synapseClient)
 library(RMySQL)
 library(yaml)
+library(lubridate)
 library(synapseProjectUsageStatistics)
 
 synapseLogin()
@@ -37,7 +39,7 @@ qDownloadTemplate <- 'select CLIENT,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIM
 ```
 
 ```{r config}
-config <- yaml.load_file("~/datawarehouse_config.yml")
+config <- yaml.load_file(params$databaseConfigFile)
 
 projectId <- gsub("syn", "", params$projectId)
 proj <- synGet(params$projectId)
@@ -47,7 +49,7 @@ if (is.na(params$nMonths)) {
   startDate <- lubridate::as_date(proj@properties$createdOn)
   thisDate <- lubridate::floor_date(lubridate::today(), "month")
   thisDate <- thisDate - lubridate::period(1, "months")
-  nMonths <- interval(startDate, thisDate) %/% months(1)
+  nMonths <- lubridate::interval(startDate, thisDate) %/% months(1)
 } else {
   nMonths <- params$nMonths
 }
@@ -274,3 +276,5 @@ if (nrow(tmp) > 0) {
   dataaccessCount %>% DT::datatable(options=list(pageLength=20), escape=1)
 }
 ```
+
+> Report Template Version: `r packageVersion("synapseProjectUsageStatistics")`
