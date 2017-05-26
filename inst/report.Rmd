@@ -15,7 +15,7 @@ library(dplyr)
 library(synapseClient)
 library(RMySQL)
 library(yaml)
-source("lib.R")
+library(synapseProjectUsageStatistics)
 
 synapseLogin()
 
