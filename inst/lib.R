@@ -40,27 +40,46 @@ processQuery <- function(data) {
   queryData
 }
 
-getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
+createTempTable <- function(con, projectId, parentIds=NULL) {
 
+  if (is.null(parentIds)) {
+    q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
+    statement <- sprintf(q.create_temp, projectId)
+  } else {
+    parentIdsSQL <- sprintf("(%s)", paste(parentIds, collapse=","))
+    q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s AND PARENT_ID IN %s GROUP BY ID;"
+    statement <- sprintf(q.create_temp, projectId, parentIdsSQL)
+  }
+  
+  create <- DBI::dbSendQuery(conn=con,
+                             statement=statement)
+}
+
+dropTempTable <- function(con) {
+  DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS;')
+}
+
+getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
   maxDate <- max(timestampBreaksDf$date)
   
   q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
   create <- DBI::dbSendQuery(conn=con,
                              statement=sprintf(q.create_temp, projectId))
   
-  res <- plyr::ddply(timestampBreaksDf, plyr::.(month, year),
-                     function (x) doQuery(con=con,
-                                          template=qTemplate, 
-                                          projectId=projectId, 
-					  date=x$date))
+  res <- tryCatch(plyr::ddply(timestampBreaksDf, plyr::.(month, year),
+                              function (x) doQuery(con=con,
+                                                   template=qTemplate, 
+                                                   projectId=projectId, 
+                                                   date=x$date)),
+                  error=function(e) dropTempTable(con),
+                  finally=function(e) dropTempTable(con))
   
-  foo <- DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS;')
+  # foo <- DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS;')
   
   res
 }
 
 getTeamMemberDF <- function(teamId) {
-  
   totalNumberOfResults <- 1000
   offset <- 0
   limit <- 50
