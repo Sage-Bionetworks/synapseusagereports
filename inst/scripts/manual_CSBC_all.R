@@ -8,7 +8,7 @@ res <- synTableQuery("select id from syn10142562")
 
 parentId <- 'syn10322050'
 
-for (id in res@values$id[1:3]) {
+for (id in res@values$id) {
   
   message(sprintf("Processing Project %s", id))
   
