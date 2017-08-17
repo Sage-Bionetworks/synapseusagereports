@@ -67,16 +67,15 @@ timestampBreaksDf <- makeDateBreaks(nMonths) %>% dplyr::arrange(date)
 ```
 
 ```{r domysqlquery}
-queryDataPageviews <- getData(con=con, qTemplate=qPageviewTemplate, 
+queryDataPageviews <- getData(conn=con, qTemplate=qPageviewTemplate, 
                               projectId=projectId,
                               timestampBreaksDf=timestampBreaksDf)
-
 
 queryDataPageviewsProcessed <- queryDataPageviews %>% 
   dplyr::mutate(recordType='pageview') %>% 
   processQuery()
 
-queryDataDownloads <- getData(con=con, qTemplate=qDownloadTemplate, 
+queryDataDownloads <- getData(conn=con, qTemplate=qDownloadTemplate, 
                               projectId=projectId,
                               timestampBreaksDf=timestampBreaksDf)
 
@@ -84,7 +83,7 @@ queryDataDownloadsProcessed <- queryDataDownloads %>%
   dplyr::mutate(recordType='download') %>% 
   processQuery()
 
-queryDataFDR <- getData(con=con, qTemplate=qFDRTemplate, 
+queryDataFDR <- getData(conn=con, qTemplate=qFDRTemplate, 
                         projectId=projectId,
                         timestampBreaksDf=timestampBreaksDf)
 

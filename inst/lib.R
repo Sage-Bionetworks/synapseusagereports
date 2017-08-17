@@ -11,11 +11,11 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 # doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
 #   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
 
-doQuery <- function(con, template, projectId, date) {
+doQuery <- function(conn, template, projectId, date) {
   message(sprintf("%s", date))
   q.browse <- sprintf(template, date, date %m+% months(1))
 
-  DBI::dbGetQuery(conn = con, statement=q.browse)
+  DBI::dbGetQuery(conn = conn, statement=q.browse)
   
 }
 
@@ -40,7 +40,7 @@ processQuery <- function(data) {
   queryData
 }
 
-createTempTable <- function(con, projectId, parentIds=NULL) {
+createTempTable <- function(conn, projectId, parentIds=NULL) {
 
   if (is.null(parentIds)) {
     q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
@@ -51,28 +51,29 @@ createTempTable <- function(con, projectId, parentIds=NULL) {
     statement <- sprintf(q.create_temp, projectId, parentIdsSQL)
   }
   
-  create <- DBI::dbSendQuery(conn=con,
+  create <- DBI::dbSendQuery(conn=conn,
                              statement=statement)
 }
 
-dropTempTable <- function(con) {
-  DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS;')
+dropTempTable <- function(conn) {
+  DBI::dbSendQuery(conn=conn, statement='DROP TABLE PROJECT_STATS;')
 }
 
-getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
+getData <- function(conn, qTemplate, projectId, timestampBreaksDf) {
   maxDate <- max(timestampBreaksDf$date)
   
-  q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
-  create <- DBI::dbSendQuery(conn=con,
-                             statement=sprintf(q.create_temp, projectId))
-  
+  # q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
+  # create <- DBI::dbSendQuery(conn=con,
+  #                            statement=sprintf(q.create_temp, projectId))
+  create <- createTempTable(conn=conn, projectId=projectId)
   res <- tryCatch(plyr::ddply(timestampBreaksDf, plyr::.(month, year),
-                              function (x) doQuery(con=con,
+                              function (x) doQuery(conn=conn,
                                                    template=qTemplate, 
                                                    projectId=projectId, 
                                                    date=x$date)),
-                  error=function(e) dropTempTable(con),
-                  finally=function(e) dropTempTable(con))
+                  error=function(e) dropTempTable(conn=conn))
+  
+  dropTempTable(conn=conn)
   
   # foo <- DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS;')
   
