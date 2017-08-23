@@ -8,6 +8,7 @@ params:
   useTeamGrouping: !r TRUE
   aclTeamOrder: !r c('syn2775243')
   queryDataFile: !r NA
+  dataOutput: !r NA
 ---
 
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
@@ -93,7 +94,9 @@ queryDataFDRProcessed <- queryDataFDR %>%
 
 queryData <- rbind(queryDataPageviewsProcessed, queryDataDownloadsProcessed, queryDataFDRProcessed)
 
-
+if (!is.na(params$dataOutput)) {
+  write.csv(queryData, file=params$dataOutput, row.names = FALSE)
+}
 ```
 ### Activity on Synapse project `r proj@properties$name` (`r params$projectId`) from `r min(timestampBreaksDf$date)` to `r max(timestampBreaksDf$date)`.
 
