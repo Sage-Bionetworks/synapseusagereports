@@ -328,3 +328,20 @@ topNEntities <- function(queryData, allUsers, topN=20) {
     dplyr::arrange(-n) %>% 
     dplyr::select(n)
 }
+
+REPORT_TEMPLATES <- c("report"="../report.Rmd")
+
+generateAndStore <- function(myParams, reportType) {
+  htmlFileName <- paste0(myParams[['projectId']], "_", reportType, "_",
+                         lubridate::today(), ".html")
+  
+  outputFileName <- paste0(tempdir(), "/", htmlFileName)
+  
+  rmarkdown::render(input=REPORT_TEMPLATES[[reportType]],
+                    output_file=outputFileName,
+                    params=myParams)
+  
+  synStore(File(outputFileName,
+                name="Usage Statistics", 
+                parentId=parentId))
+}
