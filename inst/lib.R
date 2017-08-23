@@ -59,13 +59,13 @@ dropTempTable <- function(conn) {
   DBI::dbSendQuery(conn=conn, statement='DROP TABLE PROJECT_STATS;')
 }
 
-getData <- function(conn, qTemplate, projectId, timestampBreaksDf) {
+getData <- function(conn, qTemplate, projectId, timestampBreaksDf, parentIds=NULL) {
   maxDate <- max(timestampBreaksDf$date)
   
   # q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
   # create <- DBI::dbSendQuery(conn=con,
   #                            statement=sprintf(q.create_temp, projectId))
-  create <- createTempTable(conn=conn, projectId=projectId)
+  create <- createTempTable(conn=conn, projectId=projectId, parentIds=parentIds)
   res <- tryCatch(plyr::ddply(timestampBreaksDf, plyr::.(month, year),
                               function (x) doQuery(conn=conn,
                                                    template=qTemplate, 
