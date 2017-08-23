@@ -19,5 +19,6 @@ rmarkdown::render(input=templates[[reportType]],
                   output_file=htmlFileName,
                   params = myParams)
 
-htmlFile <- synStore(File(paste0("../", htmlFileName), 
+htmlFile <- synStore(File(paste0("../", htmlFileName),
+                          name="Usage Statistics",
                           parentId=parentId))
