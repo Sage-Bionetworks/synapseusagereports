@@ -11,11 +11,11 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 # doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
 #   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
 
-doQuery <- function(con, template, projectId, date) {
+doQuery <- function(conn, template, projectId, date) {
   message(sprintf("%s", date))
   q.browse <- sprintf(template, date, date %m+% months(1))
 
-  DBI::dbGetQuery(conn = con, statement=q.browse)
+  DBI::dbGetQuery(conn = conn, statement=q.browse)
   
 }
 
@@ -40,27 +40,47 @@ processQuery <- function(data) {
   queryData
 }
 
-getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
+createTempTable <- function(conn, projectId, parentIds=NULL) {
 
+  if (is.null(parentIds)) {
+    q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
+    statement <- sprintf(q.create_temp, projectId)
+  } else {
+    parentIdsSQL <- sprintf("(%s)", paste(parentIds, collapse=","))
+    q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s AND PARENT_ID IN %s GROUP BY ID;"
+    statement <- sprintf(q.create_temp, projectId, parentIdsSQL)
+  }
+  
+  create <- DBI::dbSendQuery(conn=conn,
+                             statement=statement)
+}
+
+dropTempTable <- function(conn) {
+  DBI::dbSendQuery(conn=conn, statement='DROP TABLE PROJECT_STATS;')
+}
+
+getData <- function(conn, qTemplate, projectId, timestampBreaksDf, parentIds=NULL) {
   maxDate <- max(timestampBreaksDf$date)
   
-  q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
-  create <- DBI::dbSendQuery(conn=con,
-                             statement=sprintf(q.create_temp, projectId))
+  # q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
+  # create <- DBI::dbSendQuery(conn=con,
+  #                            statement=sprintf(q.create_temp, projectId))
+  create <- createTempTable(conn=conn, projectId=projectId, parentIds=parentIds)
+  res <- tryCatch(plyr::ddply(timestampBreaksDf, plyr::.(month, year),
+                              function (x) doQuery(conn=conn,
+                                                   template=qTemplate, 
+                                                   projectId=projectId, 
+                                                   date=x$date)),
+                  error=function(e) dropTempTable(conn=conn))
   
-  res <- plyr::ddply(timestampBreaksDf, plyr::.(month, year),
-                     function (x) doQuery(con=con,
-                                          template=qTemplate, 
-                                          projectId=projectId, 
-					  date=x$date))
+  dropTempTable(conn=conn)
   
-  foo <- DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS;')
+  # foo <- DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS;')
   
   res
 }
 
 getTeamMemberDF <- function(teamId) {
-  
   totalNumberOfResults <- 1000
   offset <- 0
   limit <- 50
@@ -307,4 +327,21 @@ topNEntities <- function(queryData, allUsers, topN=20) {
     dplyr::top_n(topN, n) %>% 
     dplyr::arrange(-n) %>% 
     dplyr::select(n)
+}
+
+REPORT_TEMPLATES <- c("report"="../report.Rmd")
+
+generateAndStore <- function(myParams, reportType) {
+  htmlFileName <- paste0(myParams[['projectId']], "_", reportType, "_",
+                         lubridate::today(), ".html")
+  
+  outputFileName <- paste0(tempdir(), "/", htmlFileName)
+  
+  rmarkdown::render(input=REPORT_TEMPLATES[[reportType]],
+                    output_file=outputFileName,
+                    params=myParams)
+  
+  synStore(File(outputFileName,
+                name="Usage Statistics", 
+                parentId=parentId))
 }
