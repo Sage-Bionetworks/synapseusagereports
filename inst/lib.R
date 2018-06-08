@@ -1,18 +1,8 @@
-library(lubridate)
-
-# Theme for plots
-mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(size=16),
-                                                axis.title.x=ggplot2::element_text(size=18),
-                                                axis.title.y=ggplot2::element_text(size=18, angle=90))
-
-# queryDict <- c('downloads'='select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,AR.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");',
-#                'webAccess'='select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");')
-
-# doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
-#   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
-
-doQuery <- function(conn, template, projectId, date) {
-  message(sprintf("%s", date))
+doQueryMonth <- function(conn, template, projectId, date, verbose=FALSE) {
+  if (verbose) {
+    message(sprintf("%s", date))  
+  }
+  
   q.browse <- sprintf(template, date, date %m+% months(1))
 
   DBI::dbGetQuery(conn = conn, statement=q.browse)
@@ -40,14 +30,16 @@ processQuery <- function(data) {
   queryData
 }
 
-createTempTable <- function(conn, projectId, parentIds=NULL) {
+createTempTable <- function(conn, projectId, parentIds=NULL, tableName="PROJECT_STATS") {
 
   if (is.null(parentIds)) {
-    q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
+    q.create_temp <- sprintf("CREATE TEMPORARY TABLE %s SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;",
+                             tableName)
     statement <- sprintf(q.create_temp, projectId)
   } else {
     parentIdsSQL <- sprintf("(%s)", paste(parentIds, collapse=","))
-    q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s AND PARENT_ID IN %s GROUP BY ID;"
+    q.create_temp <- sprintf("CREATE TEMPORARY TABLE %s SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s AND PARENT_ID IN %s GROUP BY ID;",
+                             tableName)
     statement <- sprintf(q.create_temp, projectId, parentIdsSQL)
   }
   
@@ -55,16 +47,13 @@ createTempTable <- function(conn, projectId, parentIds=NULL) {
                              statement=statement)
 }
 
-dropTempTable <- function(conn) {
-  DBI::dbSendQuery(conn=conn, statement='DROP TABLE PROJECT_STATS;')
+dropTempTable <- function(conn, tableName="PROJECT_STATS") {
+  DBI::dbSendQuery(conn=conn, statement=sprintf('DROP TABLE %s;', tableName))
 }
 
 getData <- function(conn, qTemplate, projectId, timestampBreaksDf, parentIds=NULL) {
   maxDate <- max(timestampBreaksDf$date)
   
-  # q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
-  # create <- DBI::dbSendQuery(conn=con,
-  #                            statement=sprintf(q.create_temp, projectId))
   create <- createTempTable(conn=conn, projectId=projectId, parentIds=parentIds)
   res <- tryCatch(plyr::ddply(timestampBreaksDf, plyr::.(month, year),
                               function (x) doQuery(conn=conn,
@@ -74,8 +63,6 @@ getData <- function(conn, qTemplate, projectId, timestampBreaksDf, parentIds=NUL
                   error=function(e) dropTempTable(conn=conn))
   
   dropTempTable(conn=conn)
-  
-  # foo <- DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS;')
   
   res
 }
