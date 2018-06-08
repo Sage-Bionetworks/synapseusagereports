@@ -1,32 +1,46 @@
-library(lubridate)
+qPageviewTemplate <- 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.RESPONSE_STATUS=200 AND AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID AND N.ID = NODE.ID and N.TIMESTAMP = NODE.TIMESTAMP and CLIENT IN ("WEB", "UNKNOWN") AND (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/bundle", "GET /entity/#/version/#/bundle", "GET /entity/#/wiki2", "GET /entity/#/wiki2/#"));'
 
-# Theme for plots
-mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(size=16),
-                                                axis.title.x=ggplot2::element_text(size=18),
-                                                axis.title.y=ggplot2::element_text(size=18, angle=90))
+qDownloadTemplate <- 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 and (AR.RESPONSE_STATUS IN (200, 307)) AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID AND N.TIMESTAMP = NODE.TIMESTAMP and (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/file", "GET /entity/#/version/#/file"));'
 
-# queryDict <- c('downloads'='select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,AR.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");',
-#                'webAccess'='select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");')
+qFDRTemplate <- 'SELECT FDR.ASSOCIATION_OBJECT_ID AS ENTITY_ID, CONVERT(FDR.TIMESTAMP, CHAR) AS TIMESTAMP, DATE_FORMAT(from_unixtime(FDR.TIMESTAMP / 1000), "%%Y-%%m-%%d") AS DATE, FDR.USER_ID, N.NODE_TYPE, N.NAME FROM FILE_DOWNLOAD_RECORD FDR, NODE_SNAPSHOT N, PROJECT_STATS WHERE FDR.TIMESTAMP > unix_timestamp("%s")*1000 AND FDR.TIMESTAMP < unix_timestamp("%s")*1000 AND N.ID = PROJECT_STATS.ID AND PROJECT_STATS.ID = FDR.ASSOCIATION_OBJECT_ID AND FDR.ASSOCIATION_OBJECT_TYPE = "FileEntity" AND N.TIMESTAMP = PROJECT_STATS.TIMESTAMP;'
 
-# doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
-#   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
+queryTemplates <- list('pageViewTemplate'=qPageviewTemplate,
+                       'downloadTemplate'=qDownloadTemplate,
+                       'FDRTemplate'=qFDRTemplate)
 
-doQuery <- function(conn, template, projectId, date) {
-  message(sprintf("%s", date))
-  q.browse <- sprintf(template, date, date %m+% months(1))
+#' Do a query of project usage stats by month.
+#' 
+#' This is a limitation of the data warehouse requiring queries to be run within a month.
+#'
+#' @param conn A database connection
+#' @param templateName Name of the template to use
+#' @param projectId A Synapse Project ID
+#' @param date A date
+#' @param verbose 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+doQueryMonth <- function(conn, templateName, projectId, startDate, verbose=FALSE) {
+  if (verbose) {
+    message(sprintf("%s", startDate))
+  }
+  
+  template <- queryTemplates[[templateName]]
+  
+  q.browse <- sprintf(template, startDate, 
+                      lubridate::add_with_rollback(startDate, months(1)))
 
   DBI::dbGetQuery(conn = conn, statement=q.browse)
   
 }
 
-processQuery <- function(data) {
+processUsageStatsQueryData <- function(data) {
 
   queryData <- data %>% 
     dplyr::rename(userid=USER_ID, id=ENTITY_ID) %>% 
     dplyr::select(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>% 
-    # dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>% 
-    # dplyr::ungroup() %>%
-    # rename(duplicateCount=n) %>%
     dplyr::mutate(date=as.Date(as.character(DATE)),
                   userId=as.character(userid), 
                   dateGrouping=lubridate::floor_date(date, unit="month"),
@@ -37,45 +51,54 @@ processQuery <- function(data) {
     dplyr::slice(1) %>% 
     dplyr::ungroup()
   
+  allUsers <- getQueryUserProfiles(queryData, useTeamGrouping, aclUserList)
+  
+  queryData <- queryData %>% left_join(., allUsers)
+  
   queryData
 }
 
-createTempTable <- function(conn, projectId, parentIds=NULL) {
+createTempTable <- function(conn, projectId, parentIds=NULL, tableName="PROJECT_STATS") {
 
   if (is.null(parentIds)) {
-    q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
-    statement <- sprintf(q.create_temp, projectId)
+    q.create_temp <- "CREATE TEMPORARY TABLE %s SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
+    statement <- sprintf(q.create_temp, tableName, projectId)
   } else {
     parentIdsSQL <- sprintf("(%s)", paste(parentIds, collapse=","))
-    q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s AND PARENT_ID IN %s GROUP BY ID;"
-    statement <- sprintf(q.create_temp, projectId, parentIdsSQL)
+    q.create_temp <- "CREATE TEMPORARY TABLE %s SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s AND PARENT_ID IN %s GROUP BY ID;"
+    statement <- sprintf(q.create_temp, tableName, projectId, parentIdsSQL)
   }
   
   create <- DBI::dbSendQuery(conn=conn,
                              statement=statement)
 }
 
-dropTempTable <- function(conn) {
-  DBI::dbSendQuery(conn=conn, statement='DROP TABLE PROJECT_STATS;')
+dropTempTable <- function(conn, tableName="PROJECT_STATS") {
+  DBI::dbSendQuery(conn=conn, statement=sprintf('DROP TABLE %s;', tableName))
 }
 
-getData <- function(conn, qTemplate, projectId, timestampBreaksDf, parentIds=NULL) {
+getData <- function(conn, templateName, projectId, timestampBreaksDf, parentIds=NULL,
+                    tempTableName="PROJECT_STATS", verbose=FALSE) {
   maxDate <- max(timestampBreaksDf$date)
   
-  # q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
-  # create <- DBI::dbSendQuery(conn=con,
-  #                            statement=sprintf(q.create_temp, projectId))
-  create <- createTempTable(conn=conn, projectId=projectId, parentIds=parentIds)
-  res <- tryCatch(plyr::ddply(timestampBreaksDf, plyr::.(month, year),
-                              function (x) doQuery(conn=conn,
-                                                   template=qTemplate, 
-                                                   projectId=projectId, 
-                                                   date=x$date)),
-                  error=function(e) dropTempTable(conn=conn))
+  create <- createTempTable(conn=conn, projectId=projectId, parentIds=parentIds,
+                            tableName=tempTableName)
+
+  res <- plyr::ddply(timestampBreaksDf, plyr::.(month, year),
+                     function (x) doQueryMonth(conn=conn,
+                                               templateName=templateName, 
+                                               projectId=projectId, 
+                                               startDate=x$date,
+                                               verbose=verbose))
+  
+  # res <- tryCatch(plyr::ddply(timestampBreaksDf, plyr::.(month, year),
+  #                             function (x) doQueryMonth(conn=conn,
+  #                                                       templateName=templateName, 
+  #                                                       projectId=projectId, 
+  #                                                       date=x$date)),
+  #                 error=function(e) dropTempTable(conn=conn, tableName=tempTableName))
   
   dropTempTable(conn=conn)
-  
-  # foo <- DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS;')
   
   res
 }
@@ -87,7 +110,8 @@ getTeamMemberDF <- function(teamId) {
   userListREST <- list()
   
   while(offset<totalNumberOfResults) {
-    result <- synapseClient::synRestGET(sprintf("/teamMembers/%s?limit=%s&offset=%s", teamId, limit, offset))
+    result <- synapseClient::synRestGET(sprintf("/teamMembers/%s?limit=%s&offset=%s", 
+                                                teamId, limit, offset))
     
     totalNumberOfResults <- result$totalNumberOfResults
     
@@ -173,13 +197,15 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
     allUsers$teamId <- "Registered Synapse User"
   }
 
-  allUsers$teamId <- forcats::fct_expand(factor(allUsers$teamId), "Anonymous", "Registered Synapse User")
+  allUsers$teamId <- forcats::fct_expand(factor(allUsers$teamId), 
+                                         "Anonymous", "Registered Synapse User")
   allUsers$teamId[is.na(allUsers$teamId)] <- "Registered Synapse User"
   allUsers$teamId[allUsers$userId == "273950"] <- "Anonymous"
 
   if (useTeamGrouping) {
     teamInfo <- plyr::ddply(allUsers %>%
-                              dplyr::filter(teamId != "Registered Synapse User", teamId != "Anonymous",
+                              dplyr::filter(teamId != "Registered Synapse User", 
+                                            teamId != "Anonymous",
                                             !startsWith(as.character(allUsers$teamId),
                                                         "syn")) %>%
                               dplyr::select(teamId) %>% dplyr::distinct(),
@@ -304,16 +330,10 @@ makeDateBreaks <- function(nMonths) {
   
   beginDates <- thisDate - (lubridate::period(1, "months") * 0:(nMonths - 1))
 
-  data.frame(date=beginDates, month=lubridate::month(beginDates), year=lubridate::year(beginDates))
-    # # endDates <- beginDates + (lubridate::days_in_month(beginDates)) - lubridate::seconds(1)
-  # # beginDates <- beginDates + lubridate::seconds(1)
-  # 
-  # monthBreaksDf <- data.frame(beginDate=beginDates, endDate=endDates)
-  # 
-  # monthBreaksDf %>% 
-  #   dplyr::mutate(beginTime=as.numeric(beginDate) * 1000,
-  #                 endTime=as.numeric(endDate) * 1000)
-  
+  data.frame(date=beginDates, 
+             month=lubridate::month(beginDates), 
+             year=lubridate::year(beginDates))
+
 }
 
 topNEntities <- function(queryData, allUsers, topN=20) {
