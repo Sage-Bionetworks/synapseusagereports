@@ -72,7 +72,8 @@ timestampBreaksDf <- makeDateBreaks(nMonths) %>% dplyr::arrange(date)
 queryDataPageviews <- getData(conn=con, templateName="pageViewTemplate", 
                               projectId=projectId,
                               timestampBreaksDf=timestampBreaksDf,
-                              tempTableName="PROJECT_STATS")
+                              tempTableName="PROJECT_STATS",
+                              verbose=TRUE)
 
 queryDataPageviewsProcessed <- queryDataPageviews %>% 
   dplyr::mutate(recordType='pageview') %>% 
@@ -81,7 +82,8 @@ queryDataPageviewsProcessed <- queryDataPageviews %>%
 queryDataDownloads <- getData(conn=con, templateName='downloadTemplate', 
                               projectId=projectId,
                               timestampBreaksDf=timestampBreaksDf,
-                              tempTableName="PROJECT_STATS")
+                              tempTableName="PROJECT_STATS",
+                              verbose=TRUE)
 
 queryDataDownloadsProcessed <- queryDataDownloads %>% 
   dplyr::mutate(recordType='download') %>% 
@@ -90,7 +92,8 @@ queryDataDownloadsProcessed <- queryDataDownloads %>%
 queryDataFDR <- getData(conn=con, templateName='FDRTemplate', 
                         projectId=projectId,
                         timestampBreaksDf=timestampBreaksDf,
-                        tempTableName="PROJECT_STATS")
+                        tempTableName="PROJECT_STATS",
+                        verbose=TRUE)
 
 queryDataFDRProcessed <- queryDataFDR %>% 
   dplyr::mutate(recordType='download') %>% 
