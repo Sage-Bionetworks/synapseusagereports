@@ -69,42 +69,47 @@ timestampBreaksDf <- makeDateBreaks(nMonths) %>% dplyr::arrange(date)
 ```
 
 ```{r domysqlquery}
-queryDataPageviews <- getData(conn=con, templateName="pageViewTemplate", 
-                              projectId=projectId,
-                              timestampBreaksDf=timestampBreaksDf,
-                              tempTableName="PROJECT_STATS",
-                              verbose=TRUE)
-
-queryDataPageviewsProcessed <- queryDataPageviews %>% 
-  dplyr::mutate(recordType='pageview') %>% 
-  processUsageStatsQueryData()
-
-queryDataDownloads <- getData(conn=con, templateName='downloadTemplate', 
-                              projectId=projectId,
-                              timestampBreaksDf=timestampBreaksDf,
-                              tempTableName="PROJECT_STATS",
-                              verbose=TRUE)
-
-queryDataDownloadsProcessed <- queryDataDownloads %>% 
-  dplyr::mutate(recordType='download') %>% 
-  processUsageStatsQueryData()
-
-queryDataFDR <- getData(conn=con, templateName='FDRTemplate', 
-                        projectId=projectId,
-                        timestampBreaksDf=timestampBreaksDf,
-                        tempTableName="PROJECT_STATS",
-                        verbose=TRUE)
-
-queryDataFDRProcessed <- queryDataFDR %>% 
-  dplyr::mutate(recordType='download') %>% 
-  processUsageStatsQueryData()
-
-queryData <- rbind(queryDataPageviewsProcessed, 
-                   queryDataDownloadsProcessed,
-                   queryDataFDRProcessed)
-
-if (!is.na(params$dataOutput)) {
-  write.csv(queryData, file=params$dataOutput, row.names = FALSE)
+if (!is.na(params$queryDataFile)) {
+  queryData <- readr::read_csv(params$queryDataFile)
+} else {
+  
+  queryDataPageviews <- getData(conn=con, templateName="pageViewTemplate", 
+                                projectId=projectId,
+                                timestampBreaksDf=timestampBreaksDf,
+                                tempTableName="PROJECT_STATS",
+                                verbose=TRUE)
+  
+  queryDataPageviewsProcessed <- queryDataPageviews %>% 
+    dplyr::mutate(recordType='pageview') %>% 
+    processUsageStatsQueryData()
+  
+  queryDataDownloads <- getData(conn=con, templateName='downloadTemplate', 
+                                projectId=projectId,
+                                timestampBreaksDf=timestampBreaksDf,
+                                tempTableName="PROJECT_STATS",
+                                verbose=TRUE)
+  
+  queryDataDownloadsProcessed <- queryDataDownloads %>% 
+    dplyr::mutate(recordType='download') %>% 
+    processUsageStatsQueryData()
+  
+  queryDataFDR <- getData(conn=con, templateName='FDRTemplate', 
+                          projectId=projectId,
+                          timestampBreaksDf=timestampBreaksDf,
+                          tempTableName="PROJECT_STATS",
+                          verbose=TRUE)
+  
+  queryDataFDRProcessed <- queryDataFDR %>% 
+    dplyr::mutate(recordType='download') %>% 
+    processUsageStatsQueryData()
+  
+  queryData <- rbind(queryDataPageviewsProcessed, 
+                     queryDataDownloadsProcessed,
+                     queryDataFDRProcessed)
+  
+  if (!is.na(params$dataOutput)) {
+    write.csv(queryData, file=params$dataOutput, row.names = FALSE)
+  }
 }
 ```
 ### Activity on Synapse project `r proj@properties$name` (`r params$projectId`) from `r min(timestampBreaksDf$date)` to `r max(timestampBreaksDf$date)`.
