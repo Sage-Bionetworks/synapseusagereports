@@ -70,46 +70,51 @@ timestampBreaksDf <- makeDateBreaks(nMonths) %>% dplyr::arrange(date)
 ```
 
 ```{r domysqlquery}
-queryDataPageviews <- getData(conn=con, templateName="pageViewTemplate", 
-                              projectId=projectId,
-                              timestampBreaksDf=timestampBreaksDf,
-                              tempTableName="PROJECT_STATS")
+if (!is.na(params$queryDataFile)) {
+  queryData <- readr::read_csv(params$queryDataFile)
+} else {
+  queryDataPageviews <- getData(conn=con, templateName="pageViewTemplate", 
+                                projectId=projectId,
+                                timestampBreaksDf=timestampBreaksDf,
+                                tempTableName="PROJECT_STATS")
 
-queryDataPageviewsProcessed <- queryDataPageviews %>% 
-  dplyr::mutate(recordType='pageview') %>% 
-  processUsageStatsQueryData() %>%
-  addUsers(., useTeamGrouping, aclUserList)
+  queryDataPageviewsProcessed <- queryDataPageviews %>% 
+    dplyr::mutate(recordType='pageview') %>% 
+    processUsageStatsQueryData() %>%
+    addUsers(., useTeamGrouping, aclUserList)
 
-queryDataDownloads <- getData(conn=con, templateName='downloadTemplate', 
-                              projectId=projectId,
-                              timestampBreaksDf=timestampBreaksDf,
-                              tempTableName="PROJECT_STATS")
+  queryDataDownloads <- getData(conn=con, templateName='downloadTemplate', 
+                                projectId=projectId,
+                                timestampBreaksDf=timestampBreaksDf,
+                                tempTableName="PROJECT_STATS")
 
-queryDataDownloadsProcessed <- queryDataDownloads %>% 
-  dplyr::mutate(recordType='download') %>% 
-  processUsageStatsQueryData() %>%
-  addUsers(., useTeamGrouping, aclUserList)
-
-
-queryDataFDR <- getData(conn=con, templateName='FDRTemplate', 
-                        projectId=projectId,
-                        timestampBreaksDf=timestampBreaksDf,
-                        tempTableName="PROJECT_STATS")
-
-queryDataFDRProcessed <- queryDataFDR %>% 
-  dplyr::mutate(recordType='download') %>% 
-  processUsageStatsQueryData() %>%
-  addUsers(., useTeamGrouping, aclUserList)
+  queryDataDownloadsProcessed <- queryDataDownloads %>% 
+    dplyr::mutate(recordType='download') %>% 
+    processUsageStatsQueryData() %>%
+    addUsers(., useTeamGrouping, aclUserList)
 
 
-queryData <- rbind(queryDataPageviewsProcessed, 
-                   queryDataDownloadsProcessed,
-                   queryDataFDRProcessed)
+  queryDataFDR <- getData(conn=con, templateName='FDRTemplate', 
+                          projectId=projectId,
+                          timestampBreaksDf=timestampBreaksDf,
+                          tempTableName="PROJECT_STATS")
+
+  queryDataFDRProcessed <- queryDataFDR %>% 
+    dplyr::mutate(recordType='download') %>% 
+    processUsageStatsQueryData() %>%
+    addUsers(., useTeamGrouping, aclUserList)
+
+
+  queryData <- rbind(queryDataPageviewsProcessed, 
+                     queryDataDownloadsProcessed,
+                     queryDataFDRProcessed)
+}
 
 if (!is.na(params$dataOutput)) {
   write.csv(queryData, file=params$dataOutput, row.names = FALSE)
 }
 ```
+
 ### Activity on Synapse project `r proj@properties$name` (`r params$projectId`) from `r min(timestampBreaksDf$date)` to `r max(timestampBreaksDf$date)`.
 
 #### Active new and unique registered Synapse users per month, starting from first month in the range:

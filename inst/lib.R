@@ -24,7 +24,7 @@ queryTemplates <- list('pageViewTemplate'=qPageviewTemplate,
 #' @examples
 doQueryMonth <- function(conn, templateName, projectId, startDate, verbose=FALSE) {
   if (verbose) {
-    message(sprintf("%s", startDate))  
+    message(sprintf("%s", startDate))
   }
   
   template <- queryTemplates[[templateName]]
@@ -80,7 +80,7 @@ dropTempTable <- function(conn, tableName="PROJECT_STATS") {
 }
 
 getData <- function(conn, templateName, projectId, timestampBreaksDf, parentIds=NULL,
-                    tempTableName="PROJECT_STATS") {
+                    tempTableName="PROJECT_STATS", verbose=FALSE) {
   maxDate <- max(timestampBreaksDf$date)
   
   create <- createTempTable(conn=conn, projectId=projectId, parentIds=parentIds,
@@ -90,7 +90,8 @@ getData <- function(conn, templateName, projectId, timestampBreaksDf, parentIds=
                      function (x) doQueryMonth(conn=conn,
                                                templateName=templateName, 
                                                projectId=projectId, 
-                                               startDate=x$date))
+                                               startDate=x$date,
+                                               verbose=verbose))
   
   # res <- tryCatch(plyr::ddply(timestampBreaksDf, plyr::.(month, year),
   #                             function (x) doQueryMonth(conn=conn,
