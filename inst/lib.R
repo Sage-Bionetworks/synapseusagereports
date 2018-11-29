@@ -51,11 +51,13 @@ processUsageStatsQueryData <- function(data) {
     dplyr::slice(1) %>% 
     dplyr::ungroup()
   
-  allUsers <- getQueryUserProfiles(queryData, useTeamGrouping, aclUserList)
-  
-  queryData <- queryData %>% left_join(., allUsers)
-  
   queryData
+}
+
+addUsers <- function(data, ...) {
+  allUsers <- getQueryUserProfiles(data, ...)
+  
+  data %>% left_join(., allUsers)
 }
 
 createTempTable <- function(conn, projectId, parentIds=NULL, tableName="PROJECT_STATS") {
