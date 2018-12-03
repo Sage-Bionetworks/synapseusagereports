@@ -5,7 +5,7 @@ suppressPackageStartupMessages(library(readr))
 suppressPackageStartupMessages(library(synapseClient))
 suppressPackageStartupMessages(library(RMySQL))
 suppressPackageStartupMessages(library(yaml))
-suppressPackageStartupMessages(library(assertr))
+suppressPackageStartupMessages(library(testthat))
 suppressPackageStartupMessages(library(optparse))
 suppressPackageStartupMessages(library(synapseProjectUsageStatistics))
 
@@ -26,9 +26,9 @@ option_list <- list(
 
 opts <- parse_args(OptionParser(option_list = option_list))
 
-assertr::assert(opts$months <= 6)
+testthat::expect_lte(opts$months, 6)
 
-synapseLogin()
+foo <- suppressMessages(synapseLogin())
 
 qPageviewTemplate <- 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.RESPONSE_STATUS=200 AND AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID AND N.ID = NODE.ID and N.TIMESTAMP = NODE.TIMESTAMP and CLIENT IN ("WEB", "UNKNOWN") AND (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/bundle", "GET /entity/#/version/#/bundle", "GET /entity/#/wiki2", "GET /entity/#/wiki2/#"));'
 
@@ -49,7 +49,7 @@ con <- dbConnect(MySQL(),
                  host = config$host,
                  dbname=config$db)
 
-queryDataPageviews <- getData(conn=con,
+queryDataPageviews <- getData(con=con,
                               qTemplate=qPageviewTemplate, 
                               projectId=projectId,
                               timestampBreaksDf=timestampBreaksDf)
@@ -58,7 +58,7 @@ queryDataPageviewsProcessed <- queryDataPageviews %>%
   dplyr::mutate(recordType='pageview') %>% 
   processQuery()
 
-queryDataDownloads <- getData(conn=con,
+queryDataDownloads <- getData(con=con,
                               qTemplate=qDownloadTemplate, 
                               projectId=projectId,
                               timestampBreaksDf=timestampBreaksDf)
@@ -67,7 +67,7 @@ queryDataDownloadsProcessed <- queryDataDownloads %>%
   dplyr::mutate(recordType='download') %>% 
   processQuery()
 
-queryDataFDR <- getData(conn=con,
+queryDataFDR <- getData(con=con,
                         qTemplate=qFDRTemplate, 
                         projectId=projectId,
                         timestampBreaksDf=timestampBreaksDf)
