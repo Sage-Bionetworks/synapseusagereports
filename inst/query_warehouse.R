@@ -6,8 +6,8 @@ suppressPackageStartupMessages(library(synapseClient))
 suppressPackageStartupMessages(library(RMySQL))
 suppressPackageStartupMessages(library(yaml))
 suppressPackageStartupMessages(library(assertr))
-source("lib.R")
 suppressPackageStartupMessages(library(optparse))
+suppressPackageStartupMessages(library(synapseProjectUsageStatistics))
 
 option_list <- list(
   make_option(c("--project_id"), type = "character",
@@ -41,14 +41,13 @@ config <- yaml.load_file(opts$config_file)
 projectId <- gsub("syn", "", opts$project_id)
 proj <- synGet(opts$project_id)
 
+timestampBreaksDf <- makeDateBreaks(opts$months) %>% dplyr::arrange(date)
+
 con <- dbConnect(MySQL(),
                  user = config$username,
                  password = config$password,
                  host = config$host,
                  dbname=config$db)
-
-timestampBreaksDf <- makeDateBreaks(opts$months) %>% dplyr::arrange(date)
-
 
 queryDataPageviews <- getData(conn=con,
                               qTemplate=qPageviewTemplate, 
