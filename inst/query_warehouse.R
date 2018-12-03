@@ -45,7 +45,7 @@ con <- dbConnect(MySQL(),
                  user = config$username,
                  password = config$password,
                  host = config$host,
-                 dbname='warehouse')
+                 dbname=config$db)
 
 timestampBreaksDf <- makeDateBreaks(opts$months) %>% dplyr::arrange(date)
 
