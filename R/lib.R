@@ -141,7 +141,7 @@ getTeamMemberDF <- function(teamId) {
   userListREST <- list()
 
   while(offset<totalNumberOfResults) {
-    result <- synapseClient::synRestGET(sprintf("/teamMembers/%s?limit=%s&offset=%s", teamId, limit, offset))
+    result <- synapser::synRestGET(sprintf("/teamMembers/%s?limit=%s&offset=%s", teamId, limit, offset))
 
     totalNumberOfResults <- result$totalNumberOfResults
 
@@ -158,13 +158,13 @@ getTeamMemberDF <- function(teamId) {
 
 #' @export
 aclToMemberList <- function(acl) {
-  aclMemberList <- plyr::ldply(acl@resourceAccess@content,
-                               function(x) data.frame(principalId=as.character(x@principalId),
-                                                      teamId=acl@id))
+  aclMemberList <- plyr::ldply(acl$resourceAccess,
+                               function(x) data.frame(principalId=as.character(x$principalId),
+                                                      teamId=acl$id))
 
   accessUsers <- plyr::llply(chunk(aclMemberList$principalId, 50),
-                             function(x) synapseClient::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
-                                                                           paste(x, collapse=",")))$children)
+                             function(x) synapser::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
+                                                                      paste(x, collapse=",")))$children)
 
   userGroupHeaders <- do.call(c, accessUsers)
 
@@ -173,11 +173,9 @@ aclToMemberList <- function(acl) {
 }
 
 #' @export
-aclToUserList <- function(synId) {
-  acl <- synapseClient::synGetEntityACL(synId)
-
+aclToUserList <- function(acl) {
   aclMemberList <- aclToMemberList(acl)
-  aclMemberList$teamId <- synId
+  aclMemberList$teamId <- acl$id
 
   userList <- plyr::ldply(aclMemberList$ownerId, getTeamMemberDF)
 
@@ -193,7 +191,8 @@ aclToUserList <- function(synId) {
 processAclUserList <- function(projectId, aclTeamOrder) {
   # Get users at project level and select the team
   # they are on dependent on the ordering in aclTeamOrder
-  aclUserList <- aclToUserList(paste0("syn", projectId))
+  acl <- synapser::synRestGET(sprintf('/entity/%s/acl', paste0("syn", projectId)))
+  aclUserList <- aclToUserList(acl)
   aclUserList$teamId <- factor(aclUserList$teamId,
                                levels=aclTeamOrder,
                                ordered=TRUE)
