@@ -13,6 +13,27 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 #   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
 
 #' @export
+render_report <- function(project_id, acl_team_order, data_file, reportType="report") {
+
+  templates <- c("report"=system.file("templates", "report.Rmd",
+                                      package = "synapseusagereports"))
+
+  myParams <- list(projectId=project_id,
+                   aclTeamOrder=acl_team_order,
+                   queryDataFile=data_file)
+
+  htmlFileName <- paste0(myParams[['projectId']], "_", reportType, "_",
+                         lubridate::today(), ".html")
+
+  outputFileName <- paste0("/tmp/", htmlFileName)
+
+  cat(rmarkdown::render(input=templates[[reportType]],
+                        output_file=outputFileName,
+                        params=myParams))
+
+}
+
+#' @export
 report_data_query <- function(con, project_id, start_date, end_date) {
 
   project_id <- gsub("syn", "", project_id)
