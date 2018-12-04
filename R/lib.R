@@ -65,29 +65,25 @@ report_data_query <- function(con, project_id, start_date, end_date) {
 #' @export
 doQuery <- function(con, template, projectId, start_date, end_date) {
   q <- sprintf(template, start_date, end_date)
-  message(sprintf("%s - %s (%s)", start_date, end_date, q))
+  message(sprintf("Querying %s to %s", start_date, end_date))
 
   res <- DBI::dbGetQuery(conn = con, statement=q)
-
-  message(sprintf("nrow = %s, min date = %s", nrow(res), min(res$DATE)))
   return(res)
 }
 
 #' @export
 processQuery <- function(data) {
-
   queryData <- data %>%
-    dplyr::rename(userid=USER_ID, id=ENTITY_ID) %>%
-    dplyr::select(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>%
-    # dplyr::count(userid, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>%
+    dplyr::rename(userId=USER_ID, id=ENTITY_ID) %>%
+    dplyr::select(userId, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>%
     # dplyr::ungroup() %>%
     # rename(duplicateCount=n) %>%
     dplyr::mutate(date=as.Date(as.character(DATE)),
-                  userId=as.character(userid),
+                  userId=as.character(userId),
                   dateGrouping=lubridate::floor_date(date, unit="month"),
                   monthYear=paste(lubridate::month(dateGrouping, label=TRUE),
                                   lubridate::year(dateGrouping))) %>%
-    dplyr::group_by(id, userid, TIMESTAMP, recordType) %>% # Get unique due to name changes, might not be most recent name!
+    dplyr::group_by(id, userId, TIMESTAMP, recordType) %>% # Get unique due to name changes, might not be most recent name!
     dplyr::arrange(TIMESTAMP) %>%
     dplyr::slice(1) %>%
     dplyr::ungroup()

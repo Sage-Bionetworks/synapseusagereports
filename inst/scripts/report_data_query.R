@@ -47,7 +47,7 @@ con <- dbConnect(MySQL(),
                  host = config$host,
                  dbname=config$db)
 
-queryData <- report_data_query(con, project_id = projectId,
+queryData <- report_data_query(con, project_id = opts$project_id,
                                start_date = start_date,
                                end_date = end_date)
 
