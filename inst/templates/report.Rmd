@@ -7,7 +7,6 @@ params:
   useTeamGrouping: !r TRUE
   aclTeamOrder: !r c('syn2775243')
   queryDataFile: !r '/tmp/syn2775243.csv'
-  databaseConfigFile: "~/datawarehouse_config.yml"
 ---
 
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
