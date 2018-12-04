@@ -13,12 +13,62 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 #   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
 
 #' @export
-doQuery <- function(con, template, projectId, date) {
-  message(sprintf("%s", date))
-  q.browse <- sprintf(template, date, date %m+% months(1))
+query_warehouse <- function(con, project_id, start_date, end_date) {
 
-  DBI::dbGetQuery(conn = con, statement=q.browse)
+  qPageviewTemplate <- 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.RESPONSE_STATUS=200 AND AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID AND N.ID = NODE.ID and N.TIMESTAMP = NODE.TIMESTAMP and CLIENT IN ("WEB", "UNKNOWN") AND (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/bundle", "GET /entity/#/version/#/bundle", "GET /entity/#/wiki2", "GET /entity/#/wiki2/#"));'
 
+  qDownloadTemplate <- 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 and (AR.RESPONSE_STATUS IN (200, 307)) AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID AND N.TIMESTAMP = NODE.TIMESTAMP and (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/file", "GET /entity/#/version/#/file"));'
+
+  qFDRTemplate <- 'SELECT FDR.ASSOCIATION_OBJECT_ID AS ENTITY_ID, CONVERT(FDR.TIMESTAMP , CHAR) AS TIMESTAMP, DATE_FORMAT(from_unixtime(FDR.TIMESTAMP / 1000), "%%Y-%%m-%%d") AS DATE, FDR.USER_ID, N.NODE_TYPE, N.NAME FROM FILE_DOWNLOAD_RECORD FDR, NODE_SNAPSHOT N, PROJECT_STATS WHERE FDR.TIMESTAMP > unix_timestamp("%s")*1000 AND FDR.TIMESTAMP < unix_timestamp("%s")*1000 AND N.ID = PROJECT_STATS.ID AND PROJECT_STATS.ID = FDR.ASSOCIATION_OBJECT_ID AND FDR.ASSOCIATION_OBJECT_TYPE = "FileEntity" AND N.TIMESTAMP = PROJECT_STATS.TIMESTAMP;'
+
+
+  timestampBreaksDf <- makeDateBreaksStartEnd(start_date, end_date) %>%
+    filter(!is.na(start_date), !is.na(end_date))
+
+  queryDataPageviews <- getData(con=con,
+                                qTemplate=qPageviewTemplate,
+                                projectId=projectId,
+                                timestampBreaksDf=timestampBreaksDf)
+
+  queryDataPageviewsProcessed <- queryDataPageviews %>%
+    dplyr::mutate(recordType='pageview') %>%
+    processQuery()
+
+  queryDataDownloads <- getData(con=con,
+                                qTemplate=qDownloadTemplate,
+                                projectId=projectId,
+                                timestampBreaksDf=timestampBreaksDf)
+
+  queryDataDownloadsProcessed <- queryDataDownloads %>%
+    dplyr::mutate(recordType='download') %>%
+    processQuery()
+
+  queryDataFDR <- getData(con=con,
+                          qTemplate=qFDRTemplate,
+                          projectId=projectId,
+                          timestampBreaksDf=timestampBreaksDf)
+
+  queryDataFDRProcessed <- queryDataFDR %>%
+    dplyr::mutate(recordType='download') %>%
+    processQuery()
+
+  queryData <- rbind(queryDataPageviewsProcessed,
+                     queryDataDownloadsProcessed,
+                     queryDataFDRProcessed)
+
+  return(queryData)
+}
+
+
+#' @export
+doQuery <- function(con, template, projectId, start_date, end_date) {
+  q <- sprintf(template, start_date, end_date)
+  message(sprintf("%s - %s (%s)", start_date, end_date, q))
+
+  res <- DBI::dbGetQuery(conn = con, statement=q)
+
+  message(sprintf("nrow = %s, min date = %s", nrow(res), min(res$DATE)))
+  return(res)
 }
 
 #' @export
@@ -46,8 +96,6 @@ processQuery <- function(data) {
 #' @export
 getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
 
-  maxDate <- max(timestampBreaksDf$date)
-
   q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
   create <- DBI::dbSendQuery(conn=con,
                              statement=sprintf(q.create_temp, projectId))
@@ -56,7 +104,9 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
                      function (x) doQuery(con=con,
                                           template=qTemplate,
                                           projectId=projectId,
-					  date=x$date))
+					  start_date=x$start_date,
+					  end_date=x$end_date
+					  ))
 
   foo <- DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS;')
 
@@ -311,6 +361,25 @@ makeDateBreaks <- function(nMonths) {
   #   dplyr::mutate(beginTime=as.numeric(beginDate) * 1000,
   #                 endTime=as.numeric(endDate) * 1000)
 
+}
+
+#' @export
+makeDateBreaksStartEnd <- function(start_date, end_date) {
+
+  start_date_floor <- lubridate::floor_date(start_date, unit = "month")
+  end_date_floor <- lubridate::floor_date(end_date, unit = "month")
+
+  date_range <- lubridate::interval(start_date_floor, end_date_floor)
+
+  n_months <- floor(date_range / lubridate::period(1, "months"))
+
+  beginDates <- end_date_floor - (lubridate::period(1, "months") * 0:(n_months))
+
+  tibble::tibble(start_date=beginDates) %>%
+    dplyr::mutate(end_date = dplyr::lag(start_date),
+                  month=lubridate::month(start_date),
+                  year=lubridate::year(start_date)) %>%
+    arrange(start_date)
 }
 
 #' @export
