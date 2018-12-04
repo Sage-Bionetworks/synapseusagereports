@@ -23,7 +23,11 @@ option_list <- list(
   make_option(c("--config_file"), type = "character",
               help = "YAML database configuration file.",
               dest = "config_file",
-              default="~/datawarehouse_config.yml")
+              default="~/datawarehouse_config.yml"),
+  make_option(c("--synapse_config"), type = "character",
+              help = "Synapse configuration file.",
+              dest = "synapse_config",
+              default="~/.synapseConfig")
 )
 
 opts <- parse_args(OptionParser(option_list = option_list))
