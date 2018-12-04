@@ -30,7 +30,8 @@ opts <- parse_args(OptionParser(option_list = option_list))
 
 start_date <- lubridate::as_date(opts$start_date)
 end_date <- lubridate::as_date(opts$end_date)
-n_months_from_today <- lubridate::interval(start_date, lubridate::today("UTC")) / lubridate::period(1, "months")
+date_interval <- lubridate::interval(start_date, lubridate::today("UTC"))
+n_months_from_today <- date_interval / lubridate::period(1, "months")
 
 if (n_months_from_today > 6) {
   message("Your start date is more than 6 months ago. The results of your queries may be incorrect.")
