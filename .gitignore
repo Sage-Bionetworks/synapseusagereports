@@ -4,3 +4,4 @@
 mysql_config.yml
 inst/*.html
 inst/*.md
+inst/syn*

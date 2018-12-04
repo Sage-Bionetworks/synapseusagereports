@@ -1,10 +1,10 @@
 library(synapseClient)
-library(synapseProjectUsageStatistics)
+library(synapseusagereports)
 
 synapseLogin()
 
 templates <- c("report"=system.file("templates", "report.Rmd",
-                                    package = "synapseProjectUsageStatistics"))
+                                    package = "synapseusagereports"))
 reportType <- "report"
 
 projectId <- 'syn2580853'
@@ -13,7 +13,9 @@ parentId <- 'syn8457451'
 myParams <- list(projectId=projectId,
                  nMonths=NA,
                  aclTeamOrder=c(3346847, 3320424, projectId),
-                 useTeamGrouping=TRUE)
+                 useTeamGrouping=TRUE,
+                 dataOutput=paste0(projectId, "_", reportType, "_",
+                                   lubridate::today(), ".csv"))
 
 htmlFileName <- paste0(myParams[['projectId']], "_", reportType, "_",
                        lubridate::today(), ".html")
@@ -25,4 +27,5 @@ rmarkdown::render(input=templates[[reportType]],
                   params=myParams)
 
 htmlFile <- synStore(File(outputFileName,
-                          name="Usage Statistics", parentId=parentId))
+                          name="Usage Statistics",
+                          parentId=parentId))
