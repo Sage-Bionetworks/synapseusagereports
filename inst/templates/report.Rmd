@@ -4,11 +4,8 @@ output:
     keep_md: yes
 params:
   projectId: !r 'syn2775243'
-  nMonths: !r NA
-  useTeamGrouping: !r TRUE
-  aclTeamOrder: !r c('syn2775243')
+  aclTeamOrder: !r NA
   queryDataFile: !r NA
-  dataOutput: !r NA
 ---
 
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
@@ -16,7 +13,8 @@ library(dplyr)
 library(synapseClient)
 library(RMySQL)
 library(yaml)
-source("lib.R")
+library(lubridate)
+library(synapseusagereports)
 
 synapseLogin()
 
@@ -33,86 +31,46 @@ knitr::opts_chunk$set(
 ```
 
 ```{r config}
-config <- yaml.load_file("~/datawarehouse_config.yml")
-
-projectId <- gsub("syn", "", params$projectId)
+int_project_id <- gsub("syn", "", params$projectId)
 proj <- synGet(params$projectId)
 
-
-if (is.na(params$nMonths)) {
-  startDate <- lubridate::as_date(proj@properties$createdOn)
-  thisDate <- lubridate::floor_date(lubridate::today(), "month")
-  thisDate <- thisDate - lubridate::period(1, "months")
-  nMonths <- lubridate::interval(startDate, thisDate) %/% months(1)
+if (is.na(params$aclTeamOrder)) {
+  useTeamGrouping <- FALSE
 } else {
-  nMonths <- params$nMonths
+  useTeamGrouping <- TRUE
+  aclTeamOrder <- stringr::str_split(params$aclTeamOrder, 
+                                   pattern=',', 
+                                   simplify = FALSE)[[1]]
+  aclTeamOrder <- c(aclTeamOrder, params$projectID)
 }
 
-useTeamGrouping <- params$useTeamGrouping
-aclTeamOrder <- params$aclTeamOrder
 
+queryData <- readr::read_csv(params$queryDataFile) %>% 
+  mutate(userId=as.character(userId))
+```
+
+### Activity on Synapse project `r proj@properties$name` (`r params$projectId`) from `r min(queryData$date)` to `r max(queryData$date)`.
+
+```{r users}
 if (useTeamGrouping) {
-  aclUserList <- processAclUserList(projectId, aclTeamOrder)
+  aclUserList <- processAclUserList(int_project_id, aclTeamOrder)
 } else {
   aclUserList <- NULL
 }
+```
 
-con <- dbConnect(MySQL(),
-                 user = config$username,
-                 password = config$password,
-                 host = config$host,
-                 dbname='warehouse')
+```{r summaryuseraccess}
+# Get user profile info for users in records
 
-timestampBreaksDf <- makeDateBreaks(nMonths) %>% dplyr::arrange(date)
-
+allUsers <- getQueryUserProfiles(queryData, useTeamGrouping, aclUserList)
 
 ```
 
-```{r domysqlquery}
-if (!is.na(params$queryDataFile)) {
-  queryData <- readr::read_csv(params$queryDataFile)
-} else {
-  
-  queryDataPageviews <- getData(conn=con, templateName="pageViewTemplate", 
-                                projectId=projectId,
-                                timestampBreaksDf=timestampBreaksDf,
-                                tempTableName="PROJECT_STATS",
-                                verbose=TRUE)
-  
-  queryDataPageviewsProcessed <- queryDataPageviews %>% 
-    dplyr::mutate(recordType='pageview') %>% 
-    processUsageStatsQueryData()
-  
-  queryDataDownloads <- getData(conn=con, templateName='downloadTemplate', 
-                                projectId=projectId,
-                                timestampBreaksDf=timestampBreaksDf,
-                                tempTableName="PROJECT_STATS",
-                                verbose=TRUE)
-  
-  queryDataDownloadsProcessed <- queryDataDownloads %>% 
-    dplyr::mutate(recordType='download') %>% 
-    processUsageStatsQueryData()
-  
-  queryDataFDR <- getData(conn=con, templateName='FDRTemplate', 
-                          projectId=projectId,
-                          timestampBreaksDf=timestampBreaksDf,
-                          tempTableName="PROJECT_STATS",
-                          verbose=TRUE)
-  
-  queryDataFDRProcessed <- queryDataFDR %>% 
-    dplyr::mutate(recordType='download') %>% 
-    processUsageStatsQueryData()
-  
-  queryData <- rbind(queryDataPageviewsProcessed, 
-                     queryDataDownloadsProcessed,
-                     queryDataFDRProcessed)
-  
-  if (!is.na(params$dataOutput)) {
-    write.csv(queryData, file=params$dataOutput, row.names = FALSE)
-  }
-}
+```{r userJoin}
+queryData <- queryData %>%
+  left_join(., allUsers) %>%
+  dplyr::filter(!is.na(teamName))
 ```
-### Activity on Synapse project `r proj@properties$name` (`r params$projectId`) from `r min(timestampBreaksDf$date)` to `r max(timestampBreaksDf$date)`.
 
 #### Active new and unique registered Synapse users per month, starting from first month in the range:
 ```{r}
@@ -143,7 +101,8 @@ There are `r length(setdiff(unique(queryData$userName), c("anonymous")))` active
 Count of the number of page views of the main project Wiki (`r params$projectId`) per month.
 
 ```{r}
-projectPageViews <- queryData %>% filter(recordType=='pageview', NODE_TYPE=='project', id==projectId)
+projectPageViews <- queryData %>% 
+  filter(recordType=='pageview', NODE_TYPE=='project', id == int_project_id)
 
 if (nrow(projectPageViews) > 0) {
   if (useTeamGrouping) {
@@ -183,6 +142,19 @@ if (useTeamGrouping) {
 }
 
 dateGroupingCount %>% knitr::kable()
+```
+
+#### Page views per day
+
+Plot of the page views of any page (Wiki or entity) in the entire project per day.
+
+```{r plotperday, fig.width=20, fig.height=6, include=TRUE, eval=TRUE}
+perdayCount <- countByDay(queryData %>% filter(recordType == 'pageview'), 
+                          useTeamGrouping)
+
+if (nrow(perdayCount) > 0) {
+  plotByDay(perdayCount, useTeamGrouping)
+}
 ```
 
 #### Entity page views
@@ -264,3 +236,5 @@ if (nrow(tmp) > 0) {
   dataaccessCount %>% DT::datatable(options=list(pageLength=20), escape=1)
 }
 ```
+
+> Report Template Version: `r packageVersion("synapseusagereports")`
