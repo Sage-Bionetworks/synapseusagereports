@@ -4,9 +4,8 @@ output:
     keep_md: yes
 params:
   projectId: !r 'syn2775243'
-  useTeamGrouping: !r TRUE
-  aclTeamOrder: !r c('syn2775243')
-  queryDataFile: !r '/tmp/syn2775243.csv'
+  aclTeamOrder: !r NA
+  queryDataFile: !r NA
 ---
 
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
@@ -35,14 +34,22 @@ knitr::opts_chunk$set(
 int_project_id <- gsub("syn", "", params$projectId)
 proj <- synGet(params$projectId)
 
-useTeamGrouping <- params$useTeamGrouping
-aclTeamOrder <- params$aclTeamOrder
+if (is.na(params$aclTeamOrder)) {
+  useTeamGrouping <- FALSE
+} else {
+  useTeamGrouping <- TRUE
+  aclTeamOrder <- stringr::str_split(params$aclTeamOrder, 
+                                   pattern=',', 
+                                   simplify = FALSE)[[1]]
+  aclTeamOrder <- c(aclTeamOrder, params$projectID)
+}
+
 
 queryData <- readr::read_csv(params$queryDataFile) %>% 
   mutate(userId=as.character(userId))
 ```
 
-### Activity on Synapse project `r proj@properties$name` (`r params$projectId`) from `r min(timestampBreaksDf$date)` to `r max(timestampBreaksDf$date)`.
+### Activity on Synapse project `r proj@properties$name` (`r params$projectId`) from `r min(queryData$date)` to `r max(queryData$date)`.
 
 ```{r users}
 if (useTeamGrouping) {

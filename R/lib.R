@@ -210,13 +210,16 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
     allUsers$teamId <- "Registered Synapse User"
   }
 
-  allUsers$teamId <- forcats::fct_expand(factor(allUsers$teamId), "Anonymous", "Registered Synapse User")
+  allUsers$teamId <- forcats::fct_expand(factor(allUsers$teamId),
+                                         "Anonymous",
+                                         "Registered Synapse User")
   allUsers$teamId[is.na(allUsers$teamId)] <- "Registered Synapse User"
   allUsers$teamId[allUsers$userId == "273950"] <- "Anonymous"
 
   if (useTeamGrouping) {
     teamInfo <- plyr::ddply(allUsers %>%
-                              dplyr::filter(teamId != "Registered Synapse User", teamId != "Anonymous",
+                              dplyr::filter(teamId != "Registered Synapse User",
+                                            teamId != "Anonymous",
                                             !startsWith(as.character(allUsers$teamId),
                                                         "syn")) %>%
                               dplyr::select(teamId) %>% dplyr::distinct(),
@@ -235,7 +238,11 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
     allUsers$teamName <- "Registered Synapse User"
   }
 
-  allUsers$teamName <- forcats::fct_expand(factor(allUsers$teamName), "Registered Synapse User")
+  allUsers$teamName <- forcats::fct_expand(factor(allUsers$teamName),
+                                           "Registered Synapse User",
+                                           "Anonymous")
+  allUsers$teamName[allUsers$userId == "273950"] <- "Anonymous"
+
   naTeamNames <- is.na(allUsers$teamName)
 
   allUsers$teamName <- forcats::fct_expand(allUsers$teamName,
