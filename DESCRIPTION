@@ -1,6 +1,6 @@
 Package: synapseusagereports
 Title: Generate a Reports of Synapse Project Usage
-Version: 0.0.0.9000
+Version: 0.1
 Authors@R: person("Kenneth", "Daily", email = "kenneth.daily@sagebase.org", role = c("aut", "cre"))
 Description: Generate a RMarkdown report of Synapse Project usage, including users, page views and downloads.
 Depends: R (>= 3.3.1)
