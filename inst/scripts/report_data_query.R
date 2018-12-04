@@ -40,17 +40,15 @@ foo <- suppressMessages(synapseLogin())
 
 config <- yaml.load_file(opts$config_file)
 
-projectId <- gsub("syn", "", opts$project_id)
-
 con <- dbConnect(MySQL(),
                  user = config$username,
                  password = config$password,
                  host = config$host,
                  dbname=config$db)
 
-queryData <- query_warehouse(con, project_id = projectId,
-                             start_date = start_date,
-                             end_date = end_date)
+queryData <- report_data_query(con, project_id = projectId,
+                               start_date = start_date,
+                               end_date = end_date)
 
 cat(readr::format_csv(queryData))
 

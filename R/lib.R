@@ -15,6 +15,8 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 #' @export
 report_data_query <- function(con, project_id, start_date, end_date) {
 
+  project_id <- gsub("syn", "", project_id)
+
   qPageviewTemplate <- 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.RESPONSE_STATUS=200 AND AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID AND N.ID = NODE.ID and N.TIMESTAMP = NODE.TIMESTAMP and CLIENT IN ("WEB", "UNKNOWN") AND (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/bundle", "GET /entity/#/version/#/bundle", "GET /entity/#/wiki2", "GET /entity/#/wiki2/#"));'
 
   qDownloadTemplate <- 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 and (AR.RESPONSE_STATUS IN (200, 307)) AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID AND N.TIMESTAMP = NODE.TIMESTAMP and (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/file", "GET /entity/#/version/#/file"));'
@@ -27,7 +29,7 @@ report_data_query <- function(con, project_id, start_date, end_date) {
 
   queryDataPageviews <- getData(con=con,
                                 qTemplate=qPageviewTemplate,
-                                projectId=projectId,
+                                projectId=project_id,
                                 timestampBreaksDf=timestampBreaksDf)
 
   queryDataPageviewsProcessed <- queryDataPageviews %>%
@@ -36,7 +38,7 @@ report_data_query <- function(con, project_id, start_date, end_date) {
 
   queryDataDownloads <- getData(con=con,
                                 qTemplate=qDownloadTemplate,
-                                projectId=projectId,
+                                projectId=project_id,
                                 timestampBreaksDf=timestampBreaksDf)
 
   queryDataDownloadsProcessed <- queryDataDownloads %>%
@@ -45,7 +47,7 @@ report_data_query <- function(con, project_id, start_date, end_date) {
 
   queryDataFDR <- getData(con=con,
                           qTemplate=qFDRTemplate,
-                          projectId=projectId,
+                          projectId=project_id,
                           timestampBreaksDf=timestampBreaksDf)
 
   queryDataFDRProcessed <- queryDataFDR %>%
