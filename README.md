@@ -10,9 +10,7 @@ Generate HTML usage reports for Synapse projects.
 
 ## Installation
 
-Clone this repository and install the following packages:
-
 ```
-install.packages("shiny", "rmarkdown", "plyr", "dplyr", "reshape", "data.table", "xtable", "knitr", "ggplot2", "scales", "stringr", "synapseClient", "RMySQL", "yaml", "lubridate")
+devtools::install_github("Sage-Bionetworks/synapseusagereports")
 ```
 
