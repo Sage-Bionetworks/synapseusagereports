@@ -101,6 +101,7 @@ processQuery <- function(data) {
     # rename(duplicateCount=n) %>%
     dplyr::mutate(date=as.Date(as.character(DATE)),
                   userId=as.character(userId),
+                  id=as.character(id),
                   dateGrouping=lubridate::floor_date(date, unit="month"),
                   monthYear=paste(lubridate::month(dateGrouping, label=TRUE),
                                   lubridate::year(dateGrouping))) %>%
