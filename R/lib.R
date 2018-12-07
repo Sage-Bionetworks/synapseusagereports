@@ -134,10 +134,12 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
 }
 
 #' @export
-getTeamMemberDF <- function(teamId) {
+getTeamMemberDF <- function(teamid) {
 
-  synapser::synGetTeamMembers(teamId) %>%
-    as.list() %>% {
+  foo <- synapser::synGetTeamMembers(teamid)
+  foo <- foo$asList()
+
+  foo %>% {
       tibble(teamId=purrr::map_chr(., 'teamId'),
              userId=purrr::map_chr(., c("member", "ownerId")))
     }
