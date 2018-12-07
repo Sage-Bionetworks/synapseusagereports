@@ -252,7 +252,7 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
                               dplyr::select(teamId) %>% dplyr::distinct(),
                       plyr::.(teamId),
                       function(x) {
-                        tmp <- synapser::synRestGET(sprintf("/team/%s", x$teamId));
+                        tmp <- synapser::synGetTeam(teamId);
                         data.frame(teamId=x$teamId, teamName=tmp$name)
                       }
     )
