@@ -36,7 +36,7 @@ if (n_months_from_today > 6) {
   message("Your start date is more than 6 months ago. The results of your queries may be incorrect.")
 }
 
-foo <- suppressMessages(synapseLogin())
+foo <- suppressMessages(synLogin())
 
 config <- yaml.load_file(opts$config_file)
 
