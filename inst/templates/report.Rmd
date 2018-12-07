@@ -3,7 +3,7 @@ output:
   html_document: 
     keep_md: yes
 params:
-  projectId: !r 'syn2775243'
+  projectId: !r NA
   aclTeamOrder: !r NA
   queryDataFile: !r NA
 ---
@@ -41,7 +41,6 @@ if (is.na(params$aclTeamOrder)) {
   aclTeamOrder <- stringr::str_split(params$aclTeamOrder, 
                                    pattern=',', 
                                    simplify = FALSE)[[1]]
-  aclTeamOrder <- c(aclTeamOrder, params$projectID)
 }
 
 
@@ -53,7 +52,7 @@ queryData <- readr::read_csv(params$queryDataFile) %>%
 
 ```{r users}
 if (useTeamGrouping) {
-  aclUserList <- processAclUserList(int_project_id, aclTeamOrder)
+  aclUserList <- processTeamMemberList(aclTeamOrder)
 } else {
   aclUserList <- NULL
 }
