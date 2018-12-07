@@ -134,9 +134,9 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
 }
 
 #' @export
-getTeamMemberDF <- function(teamid) {
+getTeamMemberDF <- function(teamId) {
 
-  foo <- synapser::synGetTeamMembers(teamid)
+  foo <- synapser::synGetTeamMembers(teamId)
   foo <- foo$asList()
 
   foo %>% {
