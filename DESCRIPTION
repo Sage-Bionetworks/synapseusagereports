@@ -17,6 +17,7 @@ Imports:
   knitr,
   optparse,
   readr,
-  testthat
+  testthat,
+  synapseClient
 Remotes:
   Sage-Bionetworks/rSynapseClient

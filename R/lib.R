@@ -208,6 +208,25 @@ processAclUserList <- function(projectId, aclTeamOrder) {
   aclUserList
 }
 
+#' @export
+processTeamMemberList <- function(teamIds) {
+  # Get users from provided teamIds
+  # Assign them in order of the provided team IDs
+  userList <- purrr::map_df(teamIds, getTeamMemberDF)
+
+  userList$teamId <- factor(userList$teamId,
+                            levels=teamIds,
+                            ordered=TRUE)
+
+  userList <- userList %>%
+    dplyr::group_by(userId) %>%
+    dplyr::arrange(teamId) %>%
+    dplyr::slice(1) %>%
+    dplyr::ungroup()
+
+  userList
+}
+
 chunk <- function(d, n) split(d, ceiling(seq_along(d)/n))
 
 #' @export
