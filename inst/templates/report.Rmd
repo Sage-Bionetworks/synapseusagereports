@@ -10,13 +10,13 @@ params:
 
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
 library(dplyr)
-library(synapseClient)
+library(synapser)
 library(RMySQL)
 library(yaml)
 library(lubridate)
 library(synapseusagereports)
 
-synapseLogin()
+foo <- capture.output(synLogin())
 
 options(xtable.type="html")
 
