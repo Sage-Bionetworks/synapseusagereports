@@ -101,6 +101,7 @@ processQuery <- function(data) {
     # rename(duplicateCount=n) %>%
     dplyr::mutate(date=as.Date(as.character(DATE)),
                   userId=as.character(userId),
+                  id=as.character(id),
                   dateGrouping=lubridate::floor_date(date, unit="month"),
                   monthYear=paste(lubridate::month(dateGrouping, label=TRUE),
                                   lubridate::year(dateGrouping))) %>%
@@ -204,6 +205,25 @@ processAclUserList <- function(projectId, aclTeamOrder) {
     dplyr::ungroup()
 
   aclUserList
+}
+
+#' @export
+processTeamMemberList <- function(teamIds) {
+  # Get users from provided teamIds
+  # Assign them in order of the provided team IDs
+  userList <- purrr::map_df(teamIds, getTeamMemberDF)
+
+  userList$teamId <- factor(userList$teamId,
+                            levels=teamIds,
+                            ordered=TRUE)
+
+  userList <- userList %>%
+    dplyr::group_by(userId) %>%
+    dplyr::arrange(teamId) %>%
+    dplyr::slice(1) %>%
+    dplyr::ungroup()
+
+  userList
 }
 
 chunk <- function(d, n) split(d, ceiling(seq_along(d)/n))
