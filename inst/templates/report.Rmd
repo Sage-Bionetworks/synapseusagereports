@@ -39,8 +39,8 @@ if (is.na(params$aclTeamOrder) | params$aclTeamOrder == '') {
 } else {
   useTeamGrouping <- TRUE
   aclTeamOrder <- stringr::str_split(params$aclTeamOrder, 
-                                   pattern=',', 
-                                   simplify = FALSE)[[1]]
+                                     pattern=',', 
+                                     simplify = FALSE)[[1]]
 }
 
 
