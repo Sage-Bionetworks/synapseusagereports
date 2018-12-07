@@ -48,7 +48,7 @@ queryData <- readr::read_csv(params$queryDataFile) %>%
   mutate(userId=as.character(userId))
 ```
 
-### Activity on Synapse project `r proj@properties$name` (`r params$projectId`) from `r min(queryData$date)` to `r max(queryData$date)`.
+### Activity on Synapse project `r proj$properties$name` (`r params$projectId`) from `r min(queryData$date)` to `r max(queryData$date)`.
 
 ```{r users}
 if (useTeamGrouping) {
