@@ -246,18 +246,18 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
   allUsers$teamId[allUsers$userId == "273950"] <- "Anonymous"
 
   if (useTeamGrouping) {
-    teamInfo <- plyr::ddply(allUsers %>%
-                              dplyr::filter(teamId != "Registered Synapse User",
-                                            teamId != "Anonymous",
-                                            !startsWith(as.character(allUsers$teamId),
-                                                        "syn")) %>%
-                              dplyr::select(teamId) %>% dplyr::distinct(),
-                      plyr::.(teamId),
-                      function(x) {
-                        tmp <- synapser::synGetTeam(teamId);
-                        data.frame(teamId=x$teamId, teamName=tmp$name)
-                      }
-    )
+    tmp_all_users <- allUsers %>%
+      dplyr::filter(teamId != "Registered Synapse User",
+                    teamId != "Anonymous") %>%
+      dplyr::select(teamId) %>% dplyr::distinct(.keep_all=TRUE)
+
+    teamInfo <- lapply(as.list(as.character(tmp_all_users$teamId)),
+                       function (x) synapser::synGetTeam(x)) %>%
+                       {
+                         tibble(teamId=tmp_all_users$teamId,
+                                teamName=purrr::map_chr(., 'name'))
+                       }
+
     if (nrow(teamInfo) > 0) {
       allUsers <- dplyr::left_join(allUsers, teamInfo, by="teamId")
     } else {
