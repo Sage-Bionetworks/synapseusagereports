@@ -2,7 +2,6 @@
 
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(readr))
-suppressPackageStartupMessages(library(synapseClient))
 suppressPackageStartupMessages(library(RMySQL))
 suppressPackageStartupMessages(library(yaml))
 suppressPackageStartupMessages(library(testthat))
@@ -23,11 +22,7 @@ option_list <- list(
   make_option(c("--config_file"), type = "character",
               help = "YAML database configuration file.",
               dest = "config_file",
-              default="~/datawarehouse_config.yml"),
-  make_option(c("--synapse_config"), type = "character",
-              help = "Synapse configuration file.",
-              dest = "synapse_config",
-              default="~/.synapseConfig")
+              default="~/datawarehouse_config.yml")
 )
 
 opts <- parse_args(OptionParser(option_list = option_list))

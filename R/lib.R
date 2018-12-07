@@ -234,8 +234,8 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
 
 
   accessUsers <- plyr::llply(chunk(unique(queryData$userId), 50),
-                             function(x) synapseClient::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
-                                                                           paste(x, collapse=",")))$children)
+                             function(x) synapser::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
+                                                                      paste(x, collapse=",")))$children)
 
   accessUsersChildren <- do.call(c, accessUsers)
 
@@ -265,7 +265,7 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
                               dplyr::select(teamId) %>% dplyr::distinct(),
                       plyr::.(teamId),
                       function(x) {
-                        tmp <- synapseClient::synRestGET(sprintf("/team/%s", x$teamId));
+                        tmp <- synapser::synRestGET(sprintf("/team/%s", x$teamId));
                         data.frame(teamId=x$teamId, teamName=tmp$name)
                       }
     )
