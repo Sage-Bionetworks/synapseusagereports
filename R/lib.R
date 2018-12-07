@@ -13,13 +13,13 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 #   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
 
 #' @export
-render_report <- function(project_id, acl_team_order, data_file, reportType="report") {
+render_report <- function(project_id, team_order, data_file, reportType="report") {
 
   templates <- c("report"=system.file("templates", "report.Rmd",
                                       package = "synapseusagereports"))
 
   myParams <- list(projectId=project_id,
-                   aclTeamOrder=acl_team_order,
+                   teamOrder=team_order,
                    queryDataFile=data_file)
 
   htmlFileName <- paste0(myParams[['projectId']], "_", reportType, "_",
@@ -147,56 +147,6 @@ getTeamMemberDF <- function(teamId) {
 }
 
 #' @export
-aclToMemberList <- function(acl) {
-  aclMemberList <- plyr::ldply(acl$resourceAccess,
-                               function(x) data.frame(principalId=as.character(x$principalId),
-                                                      teamId=acl$id))
-
-  accessUsers <- plyr::llply(chunk(aclMemberList$principalId, 50),
-                             function(x) synapser::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
-                                                                      paste(x, collapse=",")))$children)
-
-  userGroupHeaders <- do.call(c, accessUsers)
-
-  plyr::ldply(userGroupHeaders, as.data.frame)
-
-}
-
-#' @export
-aclToUserList <- function(acl) {
-  aclMemberList <- aclToMemberList(acl)
-  aclMemberList$teamId <- acl$id
-
-  userList <- plyr::ldply(aclMemberList$ownerId, getTeamMemberDF)
-
-  userList2 <- aclMemberList %>%
-    dplyr::filter(isIndividual) %>%
-    dplyr::rename(userId=ownerId)
-
-  rbind(userList2[, c("userId", "teamId")], userList)
-
-}
-
-#' @export
-processAclUserList <- function(projectId, aclTeamOrder) {
-  # Get users at project level and select the team
-  # they are on dependent on the ordering in aclTeamOrder
-  acl <- synapser::synRestGET(sprintf('/entity/%s/acl', paste0("syn", projectId)))
-  aclUserList <- aclToUserList(acl)
-  aclUserList$teamId <- factor(aclUserList$teamId,
-                               levels=aclTeamOrder,
-                               ordered=TRUE)
-
-  aclUserList <- aclUserList %>%
-    dplyr::group_by(userId) %>%
-    dplyr::arrange(teamId) %>%
-    dplyr::slice(1) %>%
-    dplyr::ungroup()
-
-  aclUserList
-}
-
-#' @export
 processTeamMemberList <- function(teamIds) {
   # Get users from provided teamIds
   # Assign them in order of the provided team IDs
@@ -218,7 +168,7 @@ processTeamMemberList <- function(teamIds) {
 chunk <- function(d, n) split(d, ceiling(seq_along(d)/n))
 
 #' @export
-getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
+getQueryUserProfiles <- function(queryData, useTeamGrouping, userList) {
   # Get user profile info for users in data download records
 
 
@@ -233,7 +183,7 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
     dplyr::select(userId, userName)
 
   if (useTeamGrouping) {
-    allUsers <- dplyr::left_join(allUsersList, aclUserList)
+    allUsers <- dplyr::left_join(allUsersList, userList)
   } else{
     allUsers <- allUsersList
     allUsers$teamId <- "Registered Synapse User"

@@ -9,9 +9,9 @@ option_list <- list(
               help = "Synapse Project ID.",
               dest = "project_id",
               metavar = "synapseid"),
-  make_option(c("--acl_team_order"), type = "character",
-              help = "comma separated list of teams in ACL.",
-              dest = "acl_team_order",
+  make_option(c("--team_order"), type = "character",
+              help = "comma separated list of teams.",
+              dest = "team_order",
               default = ''),
   make_option(c("--synapse_config"), type = "character",
               help = "Synapse configuration file.",
@@ -29,5 +29,5 @@ data_file <- arguments$args
 login <- capture.output(synLogin())
 
 render_report(project_id = opts$project_id,
-              acl_team_order = opts$acl_team_order,
+              team_order = opts$team_order,
               data_file = data_file)

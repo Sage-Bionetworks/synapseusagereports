@@ -4,7 +4,7 @@ output:
     keep_md: yes
 params:
   projectId: !r NA
-  aclTeamOrder: !r NA
+  teamOrder: !r NA
   queryDataFile: !r NA
 ---
 
@@ -34,11 +34,11 @@ knitr::opts_chunk$set(
 int_project_id <- gsub("syn", "", params$projectId)
 proj <- synGet(params$projectId)
 
-if (is.na(params$aclTeamOrder) | params$aclTeamOrder == '') {
+if (is.na(params$teamOrder) | params$teamOrder == '') {
   useTeamGrouping <- FALSE
 } else {
   useTeamGrouping <- TRUE
-  aclTeamOrder <- stringr::str_split(params$aclTeamOrder, 
+  teamOrder <- stringr::str_split(params$teamOrder, 
                                      pattern=',', 
                                      simplify = FALSE)[[1]]
 }
@@ -52,16 +52,16 @@ queryData <- readr::read_csv(params$queryDataFile) %>%
 
 ```{r users}
 if (useTeamGrouping) {
-  aclUserList <- processTeamMemberList(aclTeamOrder)
+  userList <- processTeamMemberList(teamOrder)
 } else {
-  aclUserList <- NULL
+  userList <- NULL
 }
 ```
 
 ```{r summaryuseraccess}
 # Get user profile info for users in records
 
-allUsers <- getQueryUserProfiles(queryData, useTeamGrouping, aclUserList)
+allUsers <- getQueryUserProfiles(queryData, useTeamGrouping, userList)
 
 ```
 
@@ -196,7 +196,7 @@ if (nrow(tmp) > 0) {
 }
 ```
 
-#### Entity downloads (top 100 with more than 5 views)
+#### Entity downloads
 
 The top 50 Files or Folders with at least 5 views.
 
