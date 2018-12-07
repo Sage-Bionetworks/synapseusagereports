@@ -1,0 +1,5 @@
+host: mysql.hostname.com
+port: '3306'
+db: warehouse
+username: yourusername
+password: yourpassword
