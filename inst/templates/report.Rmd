@@ -196,7 +196,7 @@ if (nrow(tmp) > 0) {
 }
 ```
 
-#### Entity downloads (top 100 with more than 5 views)
+#### Entity downloads
 
 The top 50 Files or Folders with at least 5 views.
 
