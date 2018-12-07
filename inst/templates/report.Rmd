@@ -34,7 +34,7 @@ knitr::opts_chunk$set(
 int_project_id <- gsub("syn", "", params$projectId)
 proj <- synGet(params$projectId)
 
-if (is.na(params$aclTeamOrder)) {
+if (is.na(params$aclTeamOrder) | params$aclTeamOrder == '') {
   useTeamGrouping <- FALSE
 } else {
   useTeamGrouping <- TRUE
