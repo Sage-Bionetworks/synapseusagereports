@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-suppressPackageStartupMessages(library(synapseClient))
+suppressPackageStartupMessages(library(synapser))
 suppressPackageStartupMessages(library(optparse))
 suppressPackageStartupMessages(library(synapseusagereports))
 
@@ -12,7 +12,11 @@ option_list <- list(
   make_option(c("--acl_team_order"), type = "character",
               help = "comma separated list of teams in ACL.",
               dest = "acl_team_order",
-              default = '')
+              default = ''),
+  make_option(c("--synapse_config"), type = "character",
+              help = "Synapse configuration file.",
+              dest = "synapse_config",
+              default="~/.synapseConfig")
 )
 
 arguments <- parse_args(OptionParser(usage = "%prog [options] file",
@@ -22,7 +26,7 @@ arguments <- parse_args(OptionParser(usage = "%prog [options] file",
 opts <- arguments$options
 data_file <- arguments$args
 
-synapseLogin()
+login <- capture.output(synLogin())
 
 render_report(project_id = opts$project_id,
               acl_team_order = opts$acl_team_order,
