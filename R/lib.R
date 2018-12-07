@@ -136,36 +136,25 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
 #' @export
 getTeamMemberDF <- function(teamId) {
 
-  totalNumberOfResults <- 1000
-  offset <- 0
-  limit <- 50
-  userListREST <- list()
+  foo <- synapser::synGetTeamMembers(teamId)
+  foo <- foo$asList()
 
-  while(offset<totalNumberOfResults) {
-    result <- synapseClient::synRestGET(sprintf("/teamMembers/%s?limit=%s&offset=%s", teamId, limit, offset))
+  foo %>% {
+      tibble(teamId=purrr::map_chr(., 'teamId'),
+             userId=purrr::map_chr(., c("member", "ownerId")))
+    }
 
-    totalNumberOfResults <- result$totalNumberOfResults
-
-    userListREST <- c(userListREST, result$results)
-
-    offset <- offset + limit
-  }
-
-  userList <- plyr::ldply(userListREST,
-                          function(x) data.frame(userId=as.character(x$member$ownerId),
-                                                 teamId=as.character(x$teamId)))
-  userList
 }
 
 #' @export
 aclToMemberList <- function(acl) {
-  aclMemberList <- plyr::ldply(acl@resourceAccess@content,
-                               function(x) data.frame(principalId=as.character(x@principalId),
-                                                      teamId=acl@id))
+  aclMemberList <- plyr::ldply(acl$resourceAccess,
+                               function(x) data.frame(principalId=as.character(x$principalId),
+                                                      teamId=acl$id))
 
   accessUsers <- plyr::llply(chunk(aclMemberList$principalId, 50),
-                             function(x) synapseClient::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
-                                                                           paste(x, collapse=",")))$children)
+                             function(x) synapser::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
+                                                                      paste(x, collapse=",")))$children)
 
   userGroupHeaders <- do.call(c, accessUsers)
 
@@ -174,11 +163,9 @@ aclToMemberList <- function(acl) {
 }
 
 #' @export
-aclToUserList <- function(synId) {
-  acl <- synapseClient::synGetEntityACL(synId)
-
+aclToUserList <- function(acl) {
   aclMemberList <- aclToMemberList(acl)
-  aclMemberList$teamId <- synId
+  aclMemberList$teamId <- acl$id
 
   userList <- plyr::ldply(aclMemberList$ownerId, getTeamMemberDF)
 
@@ -194,7 +181,8 @@ aclToUserList <- function(synId) {
 processAclUserList <- function(projectId, aclTeamOrder) {
   # Get users at project level and select the team
   # they are on dependent on the ordering in aclTeamOrder
-  aclUserList <- aclToUserList(paste0("syn", projectId))
+  acl <- synapser::synRestGET(sprintf('/entity/%s/acl', paste0("syn", projectId)))
+  aclUserList <- aclToUserList(acl)
   aclUserList$teamId <- factor(aclUserList$teamId,
                                levels=aclTeamOrder,
                                ordered=TRUE)
@@ -235,8 +223,8 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
 
 
   accessUsers <- plyr::llply(chunk(unique(queryData$userId), 50),
-                             function(x) synapseClient::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
-                                                                           paste(x, collapse=",")))$children)
+                             function(x) synapser::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
+                                                                      paste(x, collapse=",")))$children)
 
   accessUsersChildren <- do.call(c, accessUsers)
 
@@ -258,18 +246,18 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, aclUserList) {
   allUsers$teamId[allUsers$userId == "273950"] <- "Anonymous"
 
   if (useTeamGrouping) {
-    teamInfo <- plyr::ddply(allUsers %>%
-                              dplyr::filter(teamId != "Registered Synapse User",
-                                            teamId != "Anonymous",
-                                            !startsWith(as.character(allUsers$teamId),
-                                                        "syn")) %>%
-                              dplyr::select(teamId) %>% dplyr::distinct(),
-                      plyr::.(teamId),
-                      function(x) {
-                        tmp <- synapseClient::synRestGET(sprintf("/team/%s", x$teamId));
-                        data.frame(teamId=x$teamId, teamName=tmp$name)
-                      }
-    )
+    tmp_all_users <- allUsers %>%
+      dplyr::filter(teamId != "Registered Synapse User",
+                    teamId != "Anonymous") %>%
+      dplyr::select(teamId) %>% dplyr::distinct(.keep_all=TRUE)
+
+    teamInfo <- lapply(as.list(as.character(tmp_all_users$teamId)),
+                       function (x) synapser::synGetTeam(x)) %>%
+                       {
+                         tibble(teamId=tmp_all_users$teamId,
+                                teamName=purrr::map_chr(., 'name'))
+                       }
+
     if (nrow(teamInfo) > 0) {
       allUsers <- dplyr::left_join(allUsers, teamInfo, by="teamId")
     } else {

@@ -1,12 +1,14 @@
 Package: synapseusagereports
 Title: Generate a Reports of Synapse Project Usage
-Version: 0.3-alpha
+Version: 0.3
 Authors@R: person("Kenneth", "Daily", email = "kenneth.daily@sagebase.org", role = c("aut", "cre"))
 Description: Generate a RMarkdown report of Synapse Project usage, including users, page views and downloads.
 Depends: R (>= 3.3.1)
 License: MIT
 Encoding: UTF-8
 LazyData: true
+URL: https://github.com/Sage-Bionetworks/synapseusagereports
+BugReports: https://github.com/Sage-Bionetworks/synapseusagereports/issues
 RoxygenNote: 6.1.0
 Imports:
   dplyr,
@@ -18,6 +20,6 @@ Imports:
   optparse,
   readr,
   testthat,
-  synapseClient
-Remotes:
-  Sage-Bionetworks/rSynapseClient
+  synapser
+Additional_repositories:
+  https://sage-bionetworks.github.io/ran

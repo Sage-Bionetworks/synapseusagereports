@@ -10,13 +10,13 @@ params:
 
 ```{r libs, echo=FALSE, warning=FALSE, message=FALSE}
 library(dplyr)
-library(synapseClient)
+library(synapser)
 library(RMySQL)
 library(yaml)
 library(lubridate)
 library(synapseusagereports)
 
-synapseLogin()
+foo <- capture.output(synLogin())
 
 options(xtable.type="html")
 
@@ -34,13 +34,13 @@ knitr::opts_chunk$set(
 int_project_id <- gsub("syn", "", params$projectId)
 proj <- synGet(params$projectId)
 
-if (is.na(params$aclTeamOrder)) {
+if (is.na(params$aclTeamOrder) | params$aclTeamOrder == '') {
   useTeamGrouping <- FALSE
 } else {
   useTeamGrouping <- TRUE
   aclTeamOrder <- stringr::str_split(params$aclTeamOrder, 
-                                   pattern=',', 
-                                   simplify = FALSE)[[1]]
+                                     pattern=',', 
+                                     simplify = FALSE)[[1]]
 }
 
 
@@ -48,7 +48,7 @@ queryData <- readr::read_csv(params$queryDataFile) %>%
   mutate(userId=as.character(userId))
 ```
 
-### Activity on Synapse project `r proj@properties$name` (`r params$projectId`) from `r min(queryData$date)` to `r max(queryData$date)`.
+### Activity on Synapse project `r proj$properties$name` (`r params$projectId`) from `r min(queryData$date)` to `r max(queryData$date)`.
 
 ```{r users}
 if (useTeamGrouping) {

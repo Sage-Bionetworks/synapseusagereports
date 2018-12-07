@@ -2,7 +2,6 @@
 
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(readr))
-suppressPackageStartupMessages(library(synapseClient))
 suppressPackageStartupMessages(library(RMySQL))
 suppressPackageStartupMessages(library(yaml))
 suppressPackageStartupMessages(library(testthat))
@@ -36,8 +35,6 @@ n_months_from_today <- date_interval / lubridate::period(1, "months")
 if (n_months_from_today > 6) {
   message("Your start date is more than 6 months ago. The results of your queries may be incorrect.")
 }
-
-foo <- suppressMessages(synapseLogin())
 
 config <- yaml.load_file(opts$config_file)
 
