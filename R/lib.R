@@ -136,25 +136,12 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
 #' @export
 getTeamMemberDF <- function(teamId) {
 
-  totalNumberOfResults <- 1000
-  offset <- 0
-  limit <- 50
-  userListREST <- list()
+  synapser::synGetTeamMembers(teamId) %>%
+    as.list() %>% {
+      tibble(teamId=purrr::map_chr(., 'teamId'),
+             userId=purrr::map_chr(., c("member", "ownerId")))
+    }
 
-  while(offset<totalNumberOfResults) {
-    result <- synapser::synRestGET(sprintf("/teamMembers/%s?limit=%s&offset=%s", teamId, limit, offset))
-
-    totalNumberOfResults <- result$totalNumberOfResults
-
-    userListREST <- c(userListREST, result$results)
-
-    offset <- offset + limit
-  }
-
-  userList <- plyr::ldply(userListREST,
-                          function(x) data.frame(userId=as.character(x$member$ownerId),
-                                                 teamId=as.character(x$teamId)))
-  userList
 }
 
 #' @export
