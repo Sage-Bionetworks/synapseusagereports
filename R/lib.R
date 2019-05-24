@@ -56,6 +56,8 @@ get_query_template_string <- function(query_type) {
 #' @export
 report_data_query <- function(con, project_id, query_type, start_date, end_date) {
 
+  message(sprintf("Generating a %s report", query_type))
+
   project_id <- gsub("syn", "", project_id)
 
   timestampBreaksDf <- makeDateBreaksStartEnd(start_date, end_date) %>%
@@ -69,7 +71,7 @@ report_data_query <- function(con, project_id, query_type, start_date, end_date)
                        timestampBreaksDf = timestampBreaksDf)
 
   queryDataProcessed <- queryData %>%
-    dplyr::mutate(recordType = 'pageview') %>%
+    dplyr::mutate(recordType = query_type) %>%
     processQuery()
 
 
@@ -110,6 +112,7 @@ report_data_query_all <- function(con, project_id, start_date, end_date) {
 #' @export
 doQuery <- function(con, template, projectId, start_date, end_date) {
   q <- sprintf(template, start_date, end_date)
+  message(sprintf("Query: %s", q))
   message(sprintf("Querying %s to %s", start_date, end_date))
 
   res <- DBI::dbGetQuery(conn = con, statement=q)
@@ -139,10 +142,16 @@ processQuery <- function(data) {
 
 #' @export
 getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
-
-  q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
+  q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS (`TIMESTAMP` bigint(20) NOT NULL, `ID` bigint(20) NOT NULL, PRIMARY KEY (`ID`,`TIMESTAMP`)); "
   create <- DBI::dbSendQuery(conn=con,
-                             statement=sprintf(q.create_temp, projectId))
+                             statement=q.create_temp)
+  message(sprintf("Created temporary table for entities in project %s", projectId))
+
+  q.insert_temp <- "INSERT INTO PROJECT_STATS (ID, TIMESTAMP) SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
+  query_statement <- sprintf(q.insert_temp, projectId)
+  insert <- DBI::dbSendQuery(conn=con,
+                             statement=query_statement)
+  message(sprintf("Inserted rows into temporary table for entities in project %s", projectId))
 
   res <- plyr::ddply(timestampBreaksDf, plyr::.(month, year),
                      function (x) doQuery(con=con,
