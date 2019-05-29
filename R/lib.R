@@ -33,59 +33,86 @@ render_report <- function(project_id, team_order, data_file, reportType="report"
 
 }
 
+query_template_strings <- list("pageview" = 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.RESPONSE_STATUS=200 AND AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID AND N.ID = NODE.ID and N.TIMESTAMP = NODE.TIMESTAMP and CLIENT IN ("WEB", "UNKNOWN") AND (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/bundle", "GET /entity/#/version/#/bundle", "GET /entity/#/wiki2", "GET /entity/#/wiki2/#"));',
+                               "download" = 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 and (AR.RESPONSE_STATUS IN (200, 307)) AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID AND N.TIMESTAMP = NODE.TIMESTAMP and (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/file", "GET /entity/#/version/#/file"));',
+                               "filedownloadrecord" = 'SELECT FDR.ASSOCIATION_OBJECT_ID AS ENTITY_ID, CONVERT(FDR.TIMESTAMP , CHAR) AS TIMESTAMP, DATE_FORMAT(from_unixtime(FDR.TIMESTAMP / 1000), "%%Y-%%m-%%d") AS DATE, FDR.USER_ID, N.NODE_TYPE, N.NAME FROM FILE_DOWNLOAD_RECORD FDR, NODE_SNAPSHOT N, PROJECT_STATS WHERE FDR.TIMESTAMP > unix_timestamp("%s")*1000 AND FDR.TIMESTAMP < unix_timestamp("%s")*1000 AND N.ID = PROJECT_STATS.ID AND PROJECT_STATS.ID = FDR.ASSOCIATION_OBJECT_ID AND FDR.ASSOCIATION_OBJECT_TYPE = "FileEntity" AND N.TIMESTAMP = PROJECT_STATS.TIMESTAMP;')
+
+#' Get the SQL query template string.
+#'
+#' @param query_type The name of the SQL query to get.
+#'
+#' @return An SQL query string.
 #' @export
-report_data_query <- function(con, project_id, start_date, end_date) {
+#'
+#' @examples
+get_query_template_string <- function(query_type) {
+  if (!(query_type %in% c("download", "pageview", "filedownloadrecord"))) {
+    stop("Not a valid query type.")
+  }
+
+  return(query_template_strings[[query_type]])
+}
+
+#' @export
+report_data_query <- function(con, project_id, query_type, start_date, end_date) {
+
+  message(sprintf("Generating a %s report", query_type))
 
   project_id <- gsub("syn", "", project_id)
-
-  qPageviewTemplate <- 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.RESPONSE_STATUS=200 AND AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID AND N.ID = NODE.ID and N.TIMESTAMP = NODE.TIMESTAMP and CLIENT IN ("WEB", "UNKNOWN") AND (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/bundle", "GET /entity/#/version/#/bundle", "GET /entity/#/wiki2", "GET /entity/#/wiki2/#"));'
-
-  qDownloadTemplate <- 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 and (AR.RESPONSE_STATUS IN (200, 307)) AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID AND N.TIMESTAMP = NODE.TIMESTAMP and (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/file", "GET /entity/#/version/#/file"));'
-
-  qFDRTemplate <- 'SELECT FDR.ASSOCIATION_OBJECT_ID AS ENTITY_ID, CONVERT(FDR.TIMESTAMP , CHAR) AS TIMESTAMP, DATE_FORMAT(from_unixtime(FDR.TIMESTAMP / 1000), "%%Y-%%m-%%d") AS DATE, FDR.USER_ID, N.NODE_TYPE, N.NAME FROM FILE_DOWNLOAD_RECORD FDR, NODE_SNAPSHOT N, PROJECT_STATS WHERE FDR.TIMESTAMP > unix_timestamp("%s")*1000 AND FDR.TIMESTAMP < unix_timestamp("%s")*1000 AND N.ID = PROJECT_STATS.ID AND PROJECT_STATS.ID = FDR.ASSOCIATION_OBJECT_ID AND FDR.ASSOCIATION_OBJECT_TYPE = "FileEntity" AND N.TIMESTAMP = PROJECT_STATS.TIMESTAMP;'
-
 
   timestampBreaksDf <- makeDateBreaksStartEnd(start_date, end_date) %>%
     filter(!is.na(start_date), !is.na(end_date))
 
-  queryDataPageviews <- getData(con=con,
-                                qTemplate=qPageviewTemplate,
-                                projectId=project_id,
-                                timestampBreaksDf=timestampBreaksDf)
+  query_template <- get_query_template_string(query_type)
 
-  queryDataPageviewsProcessed <- queryDataPageviews %>%
-    dplyr::mutate(recordType='pageview') %>%
+  queryData <- getData(con = con,
+                       qTemplate = query_template,
+                       projectId = project_id,
+                       timestampBreaksDf = timestampBreaksDf)
+
+  queryDataProcessed <- queryData %>%
+    dplyr::mutate(recordType = query_type) %>%
     processQuery()
 
-  queryDataDownloads <- getData(con=con,
-                                qTemplate=qDownloadTemplate,
-                                projectId=project_id,
-                                timestampBreaksDf=timestampBreaksDf)
 
-  queryDataDownloadsProcessed <- queryDataDownloads %>%
-    dplyr::mutate(recordType='download') %>%
-    processQuery()
+  return(queryDataProcessed)
+}
 
-  queryDataFDR <- getData(con=con,
-                          qTemplate=qFDRTemplate,
-                          projectId=project_id,
-                          timestampBreaksDf=timestampBreaksDf)
 
-  queryDataFDRProcessed <- queryDataFDR %>%
-    dplyr::mutate(recordType='download') %>%
-    processQuery()
+report_data_query_all <- function(con, project_id, start_date, end_date) {
 
-  queryData <- rbind(queryDataPageviewsProcessed,
-                     queryDataDownloadsProcessed,
-                     queryDataFDRProcessed)
+  queryDataDownload <- report_data_query(con = con,
+                                         project_id = project_id,
+                                         query_type = "pageview",
+                                         start_date = start_date,
+                                         end_date = end_date)
+
+  queryDataPageview <- report_data_query(con = con,
+                                         project_id = project_id,
+                                         query_type = "download",
+                                         start_date = start_date,
+                                         end_date = end_date)
+
+
+  queryDataFDR <- report_data_query(con = con,
+                                    project_id = project_id,
+                                    query_type = "filedownloadrecord",
+                                    start_date = start_date,
+                                    end_date = end_date)
+
+  queryDataFDR$recordType <- "download"
+
+  queryData <- rbind(queryDataPageview,
+                     queryDataDownload,
+                     queryDataFDR)
 
   return(queryData)
 }
 
-
 #' @export
 doQuery <- function(con, template, projectId, start_date, end_date) {
   q <- sprintf(template, start_date, end_date)
+  message(sprintf("Query: %s", q))
   message(sprintf("Querying %s to %s", start_date, end_date))
 
   res <- DBI::dbGetQuery(conn = con, statement=q)
@@ -115,10 +142,16 @@ processQuery <- function(data) {
 
 #' @export
 getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
-
-  q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
+  q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS (`TIMESTAMP` bigint(20) NOT NULL, `ID` bigint(20) NOT NULL, PRIMARY KEY (`ID`,`TIMESTAMP`)); "
   create <- DBI::dbSendQuery(conn=con,
-                             statement=sprintf(q.create_temp, projectId))
+                             statement=q.create_temp)
+  message(sprintf("Created temporary table for entities in project %s", projectId))
+
+  q.insert_temp <- "INSERT INTO PROJECT_STATS (ID, TIMESTAMP) SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
+  query_statement <- sprintf(q.insert_temp, projectId)
+  insert <- DBI::dbSendQuery(conn=con,
+                             statement=query_statement)
+  message(sprintf("Inserted rows into temporary table for entities in project %s", projectId))
 
   res <- plyr::ddply(timestampBreaksDf, plyr::.(month, year),
                      function (x) doQuery(con=con,
