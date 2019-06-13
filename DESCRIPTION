@@ -20,6 +20,7 @@ Imports:
   optparse,
   readr,
   testthat,
-  synapser
+  synapser,
+  ggplot2
 Additional_repositories:
   http://ran.synapse.org/
