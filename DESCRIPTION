@@ -20,6 +20,7 @@ Imports:
   optparse,
   readr,
   testthat,
-  synapser
+  synapser,
+  ggplot2
 Additional_repositories:
-  https://sage-bionetworks.github.io/ran
+  http://ran.synapse.org/
