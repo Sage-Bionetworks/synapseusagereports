@@ -140,6 +140,15 @@ processQuery <- function(data) {
   queryData
 }
 
+#' Fetch data from a data warehouse database.
+#' This first performs a filtering operation to limit the query to entities within the specified project.
+#' A temporary table is created and the timestamp of the most recent snapshot is added, which is used for joining.
+#'
+#' @param con A database connection.
+#' @param qTemplate A string of the query template from 'query_template_strings'.
+#' @param projectId A Synapse Project ID.
+#' @param timestampBreaksDf A data frame of timestamp intervals.
+#' @return A data frame of the query results.
 #' @export
 getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
   q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS (`TIMESTAMP` bigint(20) NOT NULL, `ID` bigint(20) NOT NULL, PRIMARY KEY (`ID`,`TIMESTAMP`)); "
