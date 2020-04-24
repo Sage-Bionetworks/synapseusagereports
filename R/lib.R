@@ -2,9 +2,9 @@
 #' @importFrom lubridate %m+%
 
 # Theme for plots
-mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(size=16),
-                                                axis.title.x=ggplot2::element_text(size=18),
-                                                axis.title.y=ggplot2::element_text(size=18, angle=90))
+mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text = ggplot2::element_text(size = 16),
+                                                axis.title.x = ggplot2::element_text(size = 18),
+                                                axis.title.y = ggplot2::element_text(size = 18, angle = 90))
 
 # queryDict <- c('downloads'='select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,AR.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");',
 #                'webAccess'='select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");')
@@ -13,23 +13,23 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text=ggplot2::element_text(
 #   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
 
 #' @export
-render_report <- function(project_id, team_order, data_file, reportType="report") {
+render_report <- function(project_id, team_order, data_file, reportType = "report") {
 
-  templates <- c("report"=system.file("templates", "report.Rmd",
-                                      package = "synapseusagereports"))
+  templates <- c("report" = system.file("templates", "report.Rmd",
+                                        package = "synapseusagereports"))
 
-  myParams <- list(projectId=project_id,
-                   teamOrder=team_order,
-                   queryDataFile=data_file)
+  myParams <- list(projectId = project_id,
+                   teamOrder = team_order,
+                   queryDataFile = data_file)
 
   htmlFileName <- paste0(myParams[['projectId']], "_", reportType, "_",
                          lubridate::today(), ".html")
 
   outputFileName <- paste0("/tmp/", htmlFileName)
 
-  cat(rmarkdown::render(input=templates[[reportType]],
-                        output_file=outputFileName,
-                        params=myParams))
+  cat(rmarkdown::render(input = templates[[reportType]],
+                        output_file = outputFileName,
+                        params = myParams))
 
 }
 
@@ -115,23 +115,23 @@ doQuery <- function(con, template, projectId, start_date, end_date) {
   message(sprintf("Query: %s", q))
   message(sprintf("Querying %s to %s", start_date, end_date))
 
-  res <- DBI::dbGetQuery(conn = con, statement=q)
+  res <- DBI::dbGetQuery(conn = con, statement = q)
   return(res)
 }
 
 #' @export
 processQuery <- function(data) {
   queryData <- data %>%
-    dplyr::rename(userId=USER_ID, id=ENTITY_ID) %>%
+    dplyr::rename(userId = USER_ID, id = ENTITY_ID) %>%
     dplyr::select(userId, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>%
     # dplyr::ungroup() %>%
     # rename(duplicateCount=n) %>%
-    dplyr::mutate(date=as.Date(as.character(DATE)),
-                  userId=as.character(userId),
-                  id=as.character(id),
-                  dateGrouping=lubridate::floor_date(date, unit="month"),
-                  monthYear=paste(lubridate::month(dateGrouping, label=TRUE),
-                                  lubridate::year(dateGrouping))) %>%
+    dplyr::mutate(date = as.Date(as.character(DATE)),
+                  userId = as.character(userId),
+                  id = as.character(id),
+                  dateGrouping = lubridate::floor_date(date, unit = "month"),
+                  monthYear = paste(lubridate::month(dateGrouping, label = TRUE),
+                                    lubridate::year(dateGrouping))) %>%
     dplyr::group_by(id, userId, TIMESTAMP, recordType) %>% # Get unique due to name changes, might not be most recent name!
     dplyr::arrange(TIMESTAMP) %>%
     dplyr::slice(1) %>%
@@ -140,28 +140,37 @@ processQuery <- function(data) {
   queryData
 }
 
+#' Fetch data from a data warehouse database.
+#' This first performs a filtering operation to limit the query to entities within the specified project.
+#' A temporary table is created and the timestamp of the most recent snapshot is added, which is used for joining.
+#'
+#' @param con A database connection.
+#' @param qTemplate A string of the query template from 'query_template_strings'.
+#' @param projectId A Synapse Project ID.
+#' @param timestampBreaksDf A data frame of timestamp intervals.
+#' @return A data frame of the query results.
 #' @export
 getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
   q.create_temp <- "CREATE TEMPORARY TABLE PROJECT_STATS (`TIMESTAMP` bigint(20) NOT NULL, `ID` bigint(20) NOT NULL, PRIMARY KEY (`ID`,`TIMESTAMP`)); "
-  create <- DBI::dbSendQuery(conn=con,
-                             statement=q.create_temp)
+  create <- DBI::dbSendQuery(conn = con,
+                             statement = q.create_temp)
   message(sprintf("Created temporary table for entities in project %s", projectId))
 
   q.insert_temp <- "INSERT INTO PROJECT_STATS (ID, TIMESTAMP) SELECT ID, MAX(TIMESTAMP) AS TIMESTAMP FROM NODE_SNAPSHOT WHERE PROJECT_ID = %s GROUP BY ID;"
   query_statement <- sprintf(q.insert_temp, projectId)
-  insert <- DBI::dbSendQuery(conn=con,
-                             statement=query_statement)
+  insert <- DBI::dbSendQuery(conn = con,
+                             statement = query_statement)
   message(sprintf("Inserted rows into temporary table for entities in project %s", projectId))
 
   res <- plyr::ddply(timestampBreaksDf, plyr::.(month, year),
-                     function (x) doQuery(con=con,
-                                          template=qTemplate,
-                                          projectId=projectId,
-					  start_date=x$start_date,
-					  end_date=x$end_date
+                     function (x) doQuery(con = con,
+                                          template = qTemplate,
+                                          projectId = projectId,
+					  start_date = x$start_date,
+					  end_date = x$end_date
 					  ))
 
-  foo <- DBI::dbSendQuery(conn=con, statement='DROP TABLE PROJECT_STATS;')
+  foo <- DBI::dbSendQuery(conn = con, statement = 'DROP TABLE PROJECT_STATS;')
 
   res
 }
@@ -173,8 +182,8 @@ getTeamMemberDF <- function(teamId) {
   foo <- foo$asList()
 
   foo %>% {
-      tibble(teamId=purrr::map_chr(., 'teamId'),
-             userId=purrr::map_chr(., c("member", "ownerId")))
+      tibble(teamId = purrr::map_chr(., 'teamId'),
+             userId = purrr::map_chr(., c("member", "ownerId")))
     }
 
 }
@@ -186,8 +195,8 @@ processTeamMemberList <- function(teamIds) {
   userList <- purrr::map_df(teamIds, getTeamMemberDF)
 
   userList$teamId <- factor(userList$teamId,
-                            levels=teamIds,
-                            ordered=TRUE)
+                            levels = teamIds,
+                            ordered = TRUE)
 
   userList <- userList %>%
     dplyr::group_by(userId) %>%
@@ -207,12 +216,12 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, userList) {
 
   accessUsers <- plyr::llply(chunk(unique(queryData$userId), 50),
                              function(x) synapser::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
-                                                                      paste(x, collapse=",")))$children)
+                                                                      paste(x, collapse = ",")))$children)
 
   accessUsersChildren <- do.call(c, accessUsers)
 
   allUsersList <- plyr::ldply(accessUsersChildren, as.data.frame) %>%
-    dplyr::mutate(userId=ownerId) %>%
+    dplyr::mutate(userId = ownerId) %>%
     dplyr::select(userId, userName)
 
   if (useTeamGrouping) {
@@ -235,14 +244,14 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, userList) {
       dplyr::select(teamId) %>% dplyr::distinct(.keep_all=TRUE)
 
     teamInfo <- lapply(as.list(as.character(tmp_all_users$teamId)),
-                       function (x) synapser::synGetTeam(x)) %>%
+                       function(x) synapser::synGetTeam(x)) %>%
                        {
-                         tibble(teamId=tmp_all_users$teamId,
-                                teamName=purrr::map_chr(., 'name'))
+                         tibble(teamId = tmp_all_users$teamId,
+                                teamName = purrr::map_chr(., 'name'))
                        }
 
     if (nrow(teamInfo) > 0) {
-      allUsers <- dplyr::left_join(allUsers, teamInfo, by="teamId")
+      allUsers <- dplyr::left_join(allUsers, teamInfo, by = "teamId")
     } else {
       allUsers$teamName <- "Registered Synapse User"
     }
@@ -270,7 +279,7 @@ countByMonth <- function(queryData, useTeamGrouping) {
   tmp <- queryData
 
   if (!useTeamGrouping) {
-    tmp <- tmp %>% dplyr::mutate(teamName='All')
+    tmp <- tmp %>% dplyr::mutate(teamName = 'All')
   }
 
   tmp %>%
@@ -284,7 +293,7 @@ countByDay <- function(queryData, useTeamGrouping) {
   tmp <- queryData
 
   if (!useTeamGrouping) {
-    tmp <- tmp %>% dplyr::mutate(teamName="All")
+    tmp <- tmp %>% dplyr::mutate(teamName = "All")
   }
 
   tmp %>%
@@ -296,23 +305,23 @@ countByDay <- function(queryData, useTeamGrouping) {
 #' @export
 plotByDay <- function(perdayCount, useTeamGrouping) {
   plotdata <- perdayCount %>%
-    reshape2::dcast(date ~ teamName, value.var='n', fill=0) %>%
-    reshape2::melt(., id.vars=c("date"),
-                   variable.name="teamName", value.name="n") %>%
-    dplyr::rename(group=teamName)
+    reshape2::dcast(date ~ teamName, value.var = 'n', fill = 0) %>%
+    reshape2::melt(., id.vars = c("date"),
+                   variable.name = "teamName", value.name = "n") %>%
+    dplyr::rename(group = teamName)
 
-  p <- ggplot2::ggplot(plotdata, ggplot2::aes(x=date, y=n))
-  p <- p + ggplot2::geom_line(ggplot2::aes(group=group, color=group), size=1)
+  p <- ggplot2::ggplot(plotdata, ggplot2::aes(x = date, y = n))
+  p <- p + ggplot2::geom_line(ggplot2::aes(group = group, color = group), size = 1)
 
   if (useTeamGrouping) {
     p <- p + ggplot2::scale_color_brewer(palette = "Set1")
   } else {
-    p <- p + ggplot2::scale_color_manual(values="black")
+    p <- p + ggplot2::scale_color_manual(values = "black")
   }
 
-  p  <- p + mytheme + ggplot2::theme(axis.title.x=ggplot2::element_blank(),
-                                     axis.text.x=ggplot2::element_text(size=16, angle=270),
-                                     legend.position="top")
+  p  <- p + mytheme + ggplot2::theme(axis.title.x = ggplot2::element_blank(),
+                                     axis.text.x = ggplot2::element_text(size = 16, angle = 270),
+                                     legend.position = "top")
   p
 
 }
@@ -324,8 +333,8 @@ uniqueUsersPerMonth <- function(queryData) {
     dplyr::distinct() %>%
     dplyr::filter(userName != "anonymous") %>%
     dplyr::group_by(dateGrouping) %>%
-    dplyr::summarize(Users=n_distinct(userName)) %>%
-    dplyr::rename(Date=dateGrouping)
+    dplyr::summarize(Users = n_distinct(userName)) %>%
+    dplyr::rename(Date = dateGrouping)
 }
 
 #' @export
@@ -338,37 +347,37 @@ firstMonthToVisit <- function(queryData) {
     dplyr::arrange(dateGrouping) %>%
     dplyr::slice(1) %>%
     dplyr::ungroup() %>%
-    dplyr::mutate(visit=1) %>%
+    dplyr::mutate(visit = 1) %>%
     dplyr::count(dateGrouping)
 
   missing <- unique(queryData$dateGrouping[!(queryData$dateGrouping %in% firstMonthVisit$dateGrouping)])
 
   if (length(missing) > 0) {
     firstMonthVisit <- rbind(firstMonthVisit,
-                             data.frame(n=0,
-                                        dateGrouping=missing))
+                             data.frame(n = 0,
+                                        dateGrouping = missing))
   }
 
   firstMonthVisit %>%
     dplyr::arrange(dateGrouping) %>%
-    dplyr::rename(Date=dateGrouping, Users=n)
+    dplyr::rename(Date = dateGrouping, Users = n)
 }
 
 #' @export
 multiMonthVisits <- function(queryData) {
   queryData %>%
     dplyr::group_by(userName) %>%
-    dplyr::summarize(monthsVisited=n_distinct(dateGrouping)) %>%
+    dplyr::summarize(monthsVisited = n_distinct(dateGrouping)) %>%
     dplyr::filter(monthsVisited >= 2, userName != 'anonymous')
 }
 
 #' @export
 makeDateBreaks <- function(nMonths) {
-  thisDate <- lubridate::floor_date(lubridate::today(), "month")- lubridate::period(1, "months")
+  thisDate <- lubridate::floor_date(lubridate::today(), "month") - lubridate::period(1, "months")
 
   beginDates <- thisDate - (lubridate::period(1, "months") * 0:(nMonths - 1))
 
-  data.frame(date=beginDates, month=lubridate::month(beginDates), year=lubridate::year(beginDates))
+  data.frame(date = beginDates, month = lubridate::month(beginDates), year = lubridate::year(beginDates))
     # # endDates <- beginDates + (lubridate::days_in_month(beginDates)) - lubridate::seconds(1)
   # # beginDates <- beginDates + lubridate::seconds(1)
   #
@@ -392,7 +401,7 @@ makeDateBreaksStartEnd <- function(start_date, end_date) {
 
   beginDates <- end_date_floor - (lubridate::period(1, "months") * 0:(n_months))
 
-  tibble::tibble(start_date=beginDates) %>%
+  tibble::tibble(start_date = beginDates) %>%
     dplyr::mutate(end_date = dplyr::lag(start_date),
                   month=lubridate::month(start_date),
                   year=lubridate::year(start_date)) %>%
@@ -400,12 +409,12 @@ makeDateBreaksStartEnd <- function(start_date, end_date) {
 }
 
 #' @export
-topNEntities <- function(queryData, allUsers, topN=20) {
+topNEntities <- function(queryData, allUsers, topN = 20) {
   plotdata <- queryData %>%
     dplyr::count(userName) %>%
     dplyr::ungroup() %>%
     dplyr::left_join(allUsers) %>%
-    dplyr::mutate(userName=reorder(userName, n, ordered=TRUE))
+    dplyr::mutate(userName = reorder(userName, n, ordered = TRUE))
 
   plotdata %>%
     dplyr::top_n(topN, n) %>%
