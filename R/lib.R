@@ -403,9 +403,9 @@ makeDateBreaksStartEnd <- function(start_date, end_date) {
 
   tibble::tibble(start_date = beginDates) %>%
     dplyr::mutate(end_date = dplyr::lag(start_date),
-                  month = lubridate::month(start_date),
-                  year = lubridate::year(start_date)) %>%
-    arrange(start_date)
+                  month=lubridate::month(start_date),
+                  year=lubridate::year(start_date)) %>%
+    dplyr::arrange(start_date)
 }
 
 #' @export
