@@ -6,12 +6,6 @@ mytheme <- ggplot2::theme_bw() + ggplot2::theme(axis.text = ggplot2::element_tex
                                                 axis.title.x = ggplot2::element_text(size = 18),
                                                 axis.title.y = ggplot2::element_text(size = 18, angle = 90))
 
-# queryDict <- c('downloads'='select CLIENT,NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,AR.TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/file" or PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/file");',
-#                'webAccess'='select NORMALIZED_METHOD_SIGNATURE,PROJECT_ID,BENEFACTOR_ID,PARENT_ID,ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,RESPONSE_STATUS,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, (select distinct ID from NODE_SNAPSHOT where PROJECT_ID = "%s") NODE where AR.TIMESTAMP Between %s AND %s and AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID and CLIENT = "WEB" AND (PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/version/#/bundle" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2" OR PAR.NORMALIZED_METHOD_SIGNATURE = "GET /entity/#/wiki2/#");')
-
-# doQuery <- function(con, template, projectId, beginTimestamp, endTimestamp) {
-#   q.browse <- sprintf(template, projectId, beginTimestamp, endTimestamp)
-
 #' @export
 render_report <- function(project_id, team_order, data_file, reportType = "report") {
 
@@ -378,15 +372,6 @@ makeDateBreaks <- function(nMonths) {
   beginDates <- thisDate - (lubridate::period(1, "months") * 0:(nMonths - 1))
 
   data.frame(date = beginDates, month = lubridate::month(beginDates), year = lubridate::year(beginDates))
-    # # endDates <- beginDates + (lubridate::days_in_month(beginDates)) - lubridate::seconds(1)
-  # # beginDates <- beginDates + lubridate::seconds(1)
-  #
-  # monthBreaksDf <- data.frame(beginDate=beginDates, endDate=endDates)
-  #
-  # monthBreaksDf %>%
-  #   dplyr::mutate(beginTime=as.numeric(beginDate) * 1000,
-  #                 endTime=as.numeric(endDate) * 1000)
-
 }
 
 #' @export
