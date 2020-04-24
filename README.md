@@ -1,3 +1,7 @@
+# Synapse Usage Reports
+
+[![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/sagebionetworks/synapseusagereports)](https://hub.docker.com/r/sagebionetworks/synapseusagereports)
+
 ## Information
 
 This R package generates HTML usage reports for Synapse projects. 
