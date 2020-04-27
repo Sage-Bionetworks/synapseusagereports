@@ -1,11 +1,18 @@
 #' @importFrom dplyr %>%
 #' @importFrom lubridate %m+%
 
+# Lookup of report templates.
+templates <- c("report" = system.file("templates", "report.Rmd",
+                                      package = "synapseusagereports"))
+
+#' Utility to generate a report HTML file using the template.
+#'
+#' @param project_id Synapse Project ID. This should match what is in the data file.
+#' @param team_order List of Synapse team IDs in the order to assign users to.
+#' @param data_file CSV of data from the output of the 'report_data_query' function.
+#' @param reportType The report type to generate.
 #' @export
 render_report <- function(project_id, team_order, data_file, reportType = "report") {
-
-  templates <- c("report" = system.file("templates", "report.Rmd",
-                                        package = "synapseusagereports"))
 
   myParams <- list(projectId = project_id,
                    teamOrder = team_order,
@@ -22,13 +29,17 @@ render_report <- function(project_id, team_order, data_file, reportType = "repor
 
 }
 
+# SQL queries for each type of GET operation.
+# Getting page views should be considered to be unreliable - use Google Analytics instead.
+# The 'download' query is also mostly unused by the Synapse clients.
+# REST calls have been converted to the newer 'filedownloadrecord' method.
 query_template_strings <- list("pageview" = 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.RESPONSE_STATUS=200 AND AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID AND N.ID = NODE.ID and N.TIMESTAMP = NODE.TIMESTAMP and CLIENT IN ("WEB", "UNKNOWN") AND (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/bundle", "GET /entity/#/version/#/bundle", "GET /entity/#/wiki2", "GET /entity/#/wiki2/#"));',
                                "download" = 'select ENTITY_ID,CONVERT(AR.TIMESTAMP, CHAR) AS TIMESTAMP,DATE,USER_ID,NODE_TYPE,N.NAME from ACCESS_RECORD AR, PROCESSED_ACCESS_RECORD PAR, NODE_SNAPSHOT N, PROJECT_STATS NODE where AR.TIMESTAMP > unix_timestamp("%s")*1000 AND AR.TIMESTAMP < unix_timestamp("%s")*1000 and (AR.RESPONSE_STATUS IN (200, 307)) AND AR.SESSION_ID = PAR.SESSION_ID and AR.TIMESTAMP = PAR.TIMESTAMP and PAR.ENTITY_ID = NODE.ID and N.ID = NODE.ID AND N.TIMESTAMP = NODE.TIMESTAMP and (PAR.NORMALIZED_METHOD_SIGNATURE IN ("GET /entity/#/file", "GET /entity/#/version/#/file"));',
                                "filedownloadrecord" = 'SELECT FDR.ASSOCIATION_OBJECT_ID AS ENTITY_ID, CONVERT(FDR.TIMESTAMP , CHAR) AS TIMESTAMP, DATE_FORMAT(from_unixtime(FDR.TIMESTAMP / 1000), "%%Y-%%m-%%d") AS DATE, FDR.USER_ID, N.NODE_TYPE, N.NAME FROM FILE_DOWNLOAD_RECORD FDR, NODE_SNAPSHOT N, PROJECT_STATS WHERE FDR.TIMESTAMP > unix_timestamp("%s")*1000 AND FDR.TIMESTAMP < unix_timestamp("%s")*1000 AND N.ID = PROJECT_STATS.ID AND PROJECT_STATS.ID = FDR.ASSOCIATION_OBJECT_ID AND FDR.ASSOCIATION_OBJECT_TYPE = "FileEntity" AND N.TIMESTAMP = PROJECT_STATS.TIMESTAMP;')
 
 #' Get the SQL query template string.
 #'
-#' @param query_type The name of the SQL query to get.
+#' @param query_type The name of the SQL query to get from the 'query_template_strings' lookup.
 #'
 #' @return An SQL query string.
 #' @export
@@ -40,11 +51,14 @@ get_query_template_string <- function(query_type) {
   return(query_template_strings[[query_type]])
 }
 
+#' Utility to get cleaned data for a usage report.
+#'
 #' @export
 report_data_query <- function(con, project_id, query_type, start_date, end_date) {
 
   message(sprintf("Generating a %s report", query_type))
 
+  # the database stores ID as integers, so remive syn prefix
   project_id <- gsub("syn", "", project_id)
 
   timestampBreaksDf <- makeDateBreaksStartEnd(start_date, end_date) %>%
@@ -119,6 +133,7 @@ processQuery <- function(data) {
                   dateGrouping = lubridate::floor_date(date, unit = "month"),
                   monthYear = paste(lubridate::month(dateGrouping, label = TRUE),
                                     lubridate::year(dateGrouping))) %>%
+    # Maybe this can be deprecated
     dplyr::group_by(id, userId, TIMESTAMP, recordType) %>% # Get unique due to name changes, might not be most recent name!
     dplyr::arrange(TIMESTAMP) %>%
     dplyr::slice(1) %>%
