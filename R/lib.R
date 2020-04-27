@@ -12,7 +12,7 @@ templates <- c("report" = system.file("templates", "report.Rmd",
 #' @param data_file CSV of data from the output of the 'report_data_query' function.
 #' @param reportType The report type to generate.
 #' @export
-render_report <- function(project_id, team_order, data_file, reportType = "report") {
+render_report <- function(project_id, team_order, data_file, reportType = "report", ouptutDir="/tmp/") {
 
   myParams <- list(projectId = project_id,
                    teamOrder = team_order,
@@ -21,7 +21,7 @@ render_report <- function(project_id, team_order, data_file, reportType = "repor
   htmlFileName <- paste0(myParams[['projectId']], "_", reportType, "_",
                          lubridate::today(), ".html")
 
-  outputFileName <- paste0("/tmp/", htmlFileName)
+  outputFileName <- paste0(outputDir, htmlFileName)
 
   cat(rmarkdown::render(input = templates[[reportType]],
                         output_file = outputFileName,
