@@ -19,6 +19,7 @@ query_template_strings <- list("pageview" = 'select ENTITY_ID,CONVERT(AR.TIMESTA
 #' @param query_type The name of the SQL query to get from the 'query_template_strings' lookup.
 #'
 #' @return An SQL query string.
+#'
 #' @export
 get_query_template_string <- function(query_type) {
   if (!(query_type %in% c("download", "pageview", "filedownloadrecord"))) {
@@ -33,19 +34,21 @@ get_query_template_string <- function(query_type) {
 #' @param con SQL connection object.
 #' @param project_id Synapse Project ID.
 #' @param query_type The query type, from 'query_template_strings'.
-#' @param start_date Start date of data query range, formatted as YYYY-MM-DD
-#' @param end_date End date of data query range, formatted as YYYY-MM-DD
+#' @param start_date Start date of data query range as a Date object.
+#' @param end_date End date of data query range as a Date object.
 #'
 #' @export
 report_data_query <- function(con, project_id, query_type, start_date, end_date) {
 
   message(sprintf("Generating a %s report", query_type))
 
+  start_date <- lubridate::as_date(start_date)
+  end_date <- lubridate::as_date(end_date)
+
   # the database stores ID as integers, so remive syn prefix
   project_id <- gsub("syn", "", project_id)
 
-  timestampBreaksDf <- makeDateBreaks(start_date, end_date) %>%
-    filter(!is.na(start_date), !is.na(end_date))
+  timestampBreaksDf <- makeDateBreaks(start_date, end_date)
 
   query_template <- get_query_template_string(query_type)
 
@@ -115,6 +118,8 @@ doQuery <- function(con, template, projectId, start_date, end_date) {
 #'
 #' @param data The output from the 'doQuery' function.
 #'
+#' @return A data frame with cleaned and deduplicated data.
+#'
 #' @export
 processQuery <- function(data) {
   queryData <- data %>%
@@ -171,9 +176,16 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
   res
 }
 
-
+#' Compose a data frame of start and end for each month.
+#'
+#' @param start_date Starting date as Date object or string coercable to a Date object.
+#' @param start_date Ending date as Date object or string coercable to a Date object.
+#'
 #' @export
 makeDateBreaks <- function(start_date, end_date) {
+
+  start_date <- lubridate::as_date(start_date)
+  end_date <- lubridate::as_date(end_date)
 
   start_date_floor <- lubridate::floor_date(start_date, unit = "month")
   end_date_floor <- lubridate::floor_date(end_date, unit = "month")
@@ -182,11 +194,18 @@ makeDateBreaks <- function(start_date, end_date) {
 
   n_months <- floor(date_range / lubridate::period(1, "months"))
 
+  if (n_months == 0) {
+    stop("No valid month breaks created. You might have specified a start and end in the same month.")
+  }
+
   beginDates <- end_date_floor - (lubridate::period(1, "months") * 0:(n_months))
 
   tibble::tibble(start_date = beginDates) %>%
     dplyr::mutate(end_date = dplyr::lag(start_date),
                   month=lubridate::month(start_date),
                   year=lubridate::year(start_date)) %>%
+    dplyr::filter(!is.na(start_date), !is.na(end_date)) %>%
     dplyr::arrange(start_date)
+
+
 }
