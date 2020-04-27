@@ -30,6 +30,11 @@ render_report <- function(project_id, team_order, data_file, reportType = "repor
 }
 
 # SQL queries for each type of GET operation.
+# The result of each query must be the same for downstream operations to work.
+# The result should have the following columns:
+# ENTITY_ID,TIMESTAMP,DATE,USER_ID,NODE_TYPE,NAME
+# NAME is entity name
+# NODE_TYPE is the type of entity (file, folder, project, table, etc.)
 # Getting page views should be considered to be unreliable - use Google Analytics instead.
 # The 'download' query is also mostly unused by the Synapse clients.
 # REST calls have been converted to the newer 'filedownloadrecord' method.
@@ -85,7 +90,7 @@ report_data_query <- function(con, project_id, query_type, start_date, end_date)
   return(queryDataProcessed)
 }
 
-
+#' Utility function to run all data query types.
 report_data_query_all <- function(con, project_id, start_date, end_date) {
 
   queryDataDownload <- report_data_query(con = con,
@@ -116,6 +121,14 @@ report_data_query_all <- function(con, project_id, start_date, end_date) {
   return(queryData)
 }
 
+#' Run an SQL query using a template from 'query_template_strings'.
+#'
+#' @param con SQL connection object.
+#' @param template The query template string from 'query_template_strings'.
+#' @param projectId Synapse Project ID.
+#' @param start_date Start date of data query range, formatted as YYYY-MM-DD
+#' @param end_date End date of data query range, formatted as YYYY-MM-DD
+
 #' @export
 doQuery <- function(con, template, projectId, start_date, end_date) {
   q <- sprintf(template, start_date, end_date)
@@ -126,20 +139,22 @@ doQuery <- function(con, template, projectId, start_date, end_date) {
   return(res)
 }
 
+#' Process the results of the SQL query from the 'doQuery' function.
+#'
+#' @param data The output from the 'doQuery' function.
+#'
 #' @export
 processQuery <- function(data) {
   queryData <- data %>%
     dplyr::rename(userId = USER_ID, id = ENTITY_ID) %>%
     dplyr::select(userId, id, DATE, TIMESTAMP, NODE_TYPE, NAME, recordType) %>%
-    # dplyr::ungroup() %>%
-    # rename(duplicateCount=n) %>%
     dplyr::mutate(date = as.Date(as.character(DATE)),
                   userId = as.character(userId),
                   id = as.character(id),
                   dateGrouping = lubridate::floor_date(date, unit = "month"),
                   monthYear = paste(lubridate::month(dateGrouping, label = TRUE),
                                     lubridate::year(dateGrouping))) %>%
-    # Maybe this can be deprecated
+    # TODO Maybe this can be deprecated
     dplyr::group_by(id, userId, TIMESTAMP, recordType) %>% # Get unique due to name changes, might not be most recent name!
     dplyr::arrange(TIMESTAMP) %>%
     dplyr::slice(1) %>%
@@ -171,18 +186,25 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
   message(sprintf("Inserted rows into temporary table for entities in project %s", projectId))
 
   res <- plyr::ddply(timestampBreaksDf, plyr::.(month, year),
-                     function (x) doQuery(con = con,
-                                          template = qTemplate,
-                                          projectId = projectId,
-					  start_date = x$start_date,
-					  end_date = x$end_date
-					  ))
+                     function(x) doQuery(con = con,
+                                         template = qTemplate,
+                                         projectId = projectId,
+                              					 start_date = x$start_date,
+                              					 end_date = x$end_date
+                              					 )
+                     )
 
   foo <- DBI::dbSendQuery(conn = con, statement = 'DROP TABLE PROJECT_STATS;')
 
   res
 }
 
+#' Get a data frame of user IDs from a Synapse Team.
+#'
+#' @param teamId Synapse Team ID
+#'
+#' @return A data frame with teamId and userId columns.
+#'
 #' @export
 getTeamMemberDF <- function(teamId) {
 
@@ -196,10 +218,15 @@ getTeamMemberDF <- function(teamId) {
 
 }
 
+#' Get users from provided teamIds
+#' If a user is in multiple teams, get the team provided first in the teamIds list.
+#'
+#' @param teamIds Vector of Synapse Team IDs.
+#'
+#' @return Data frame with teamId and userId columns with one team per user ID.
+#'
 #' @export
 processTeamMemberList <- function(teamIds) {
-  # Get users from provided teamIds
-  # Assign them in order of the provided team IDs
   userList <- purrr::map_df(teamIds, getTeamMemberDF)
 
   userList$teamId <- factor(userList$teamId,
@@ -215,13 +242,18 @@ processTeamMemberList <- function(teamIds) {
   userList
 }
 
+#' Split a vector into chuncks of size n
 chunk <- function(d, n) split(d, ceiling(seq_along(d)/n))
 
+#' Get user profile info for users in data download records
+#'
+#' @param queryData Data from the 'report_data_query' function - must have a column 'userId' that has Synapse User IDs.
+#' @param useTeamGrouping boolean indicating if the 'userList' should be used for grouping individuals into teams. If FALSE, all users are listed in a team called 'Registered Synapse Users'.
+#'
 #' @export
 getQueryUserProfiles <- function(queryData, useTeamGrouping, userList) {
-  # Get user profile info for users in data download records
 
-
+  # Split call into 50 users, as this is max of the API endpoint.
   accessUsers <- plyr::llply(chunk(unique(queryData$userId), 50),
                              function(x) synapser::synRestGET(sprintf("/userGroupHeaders/batch?ids=%s",
                                                                       paste(x, collapse = ",")))$children)
@@ -234,7 +266,7 @@ getQueryUserProfiles <- function(queryData, useTeamGrouping, userList) {
 
   if (useTeamGrouping) {
     allUsers <- dplyr::left_join(allUsersList, userList)
-  } else{
+  } else {
     allUsers <- allUsersList
     allUsers$teamId <- "Registered Synapse User"
   }
