@@ -173,15 +173,6 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
 
 
 #' @export
-makeDateBreaks <- function(nMonths) {
-  thisDate <- lubridate::floor_date(lubridate::today(), "month") - lubridate::period(1, "months")
-
-  beginDates <- thisDate - (lubridate::period(1, "months") * 0:(nMonths - 1))
-
-  data.frame(date = beginDates, month = lubridate::month(beginDates), year = lubridate::year(beginDates))
-}
-
-#' @export
 makeDateBreaksStartEnd <- function(start_date, end_date) {
 
   start_date_floor <- lubridate::floor_date(start_date, unit = "month")
