@@ -32,8 +32,6 @@ query_template_strings <- list("pageview" = 'select ENTITY_ID,CONVERT(AR.TIMESTA
 #'
 #' @return An SQL query string.
 #' @export
-#'
-#' @examples
 get_query_template_string <- function(query_type) {
   if (!(query_type %in% c("download", "pageview", "filedownloadrecord"))) {
     stop("Not a valid query type.")
