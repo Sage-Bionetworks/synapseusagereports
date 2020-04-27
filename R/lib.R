@@ -1,9 +1,10 @@
 #' @importFrom dplyr %>%
 #' @importFrom lubridate %m+%
 
-# Lookup of report templates.
-templates <- c("report" = system.file("templates", "report.Rmd",
-                                      package = "synapseusagereports"))
+# Lookup of report templates. Assumes these are in the 'templates' subdirectory of the synapseusagereports package.
+# Used by the 'render_report' function.
+# It's not safe to use 'system.file' here as of R 3.6 (https://developer.r-project.org/Blog/public/2019/02/14/staged-install/index.html)
+templates <- c("report" = "report.Rmd")
 
 #' Utility to generate a report HTML file using the template.
 #'
@@ -12,7 +13,12 @@ templates <- c("report" = system.file("templates", "report.Rmd",
 #' @param data_file CSV of data from the output of the 'report_data_query' function.
 #' @param reportType The report type to generate.
 #' @export
-render_report <- function(project_id, team_order, data_file, reportType = "report", ouptutDir="/tmp/") {
+render_report <- function(project_id, team_order, data_file, reportType = "report", outputDir="/tmp/") {
+
+  templateRmdName <- templates[[reportType]]
+
+  templateFile <- system.file("templates", templateRmdName,
+                              package = "synapseusagereports")
 
   myParams <- list(projectId = project_id,
                    teamOrder = team_order,
@@ -23,7 +29,7 @@ render_report <- function(project_id, team_order, data_file, reportType = "repor
 
   outputFileName <- paste0(outputDir, htmlFileName)
 
-  cat(rmarkdown::render(input = templates[[reportType]],
+  cat(rmarkdown::render(input = templateFile,
                         output_file = outputFileName,
                         params = myParams))
 
