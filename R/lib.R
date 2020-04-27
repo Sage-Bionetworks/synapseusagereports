@@ -44,7 +44,7 @@ report_data_query <- function(con, project_id, query_type, start_date, end_date)
   # the database stores ID as integers, so remive syn prefix
   project_id <- gsub("syn", "", project_id)
 
-  timestampBreaksDf <- makeDateBreaksStartEnd(start_date, end_date) %>%
+  timestampBreaksDf <- makeDateBreaks(start_date, end_date) %>%
     filter(!is.na(start_date), !is.na(end_date))
 
   query_template <- get_query_template_string(query_type)
@@ -173,7 +173,7 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
 
 
 #' @export
-makeDateBreaksStartEnd <- function(start_date, end_date) {
+makeDateBreaks <- function(start_date, end_date) {
 
   start_date_floor <- lubridate::floor_date(start_date, unit = "month")
   end_date_floor <- lubridate::floor_date(end_date, unit = "month")
