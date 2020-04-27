@@ -53,6 +53,12 @@ get_query_template_string <- function(query_type) {
 
 #' Utility to get cleaned data for a usage report.
 #'
+#' @param con SQL connection object.
+#' @param project_id Synapse Project ID.
+#' @param query_type The query type, from 'query_template_strings'.
+#' @param start_date Start date of data query range, formatted as YYYY-MM-DD
+#' @param end_date End date of data query range, formatted as YYYY-MM-DD
+#'
 #' @export
 report_data_query <- function(con, project_id, query_type, start_date, end_date) {
 
