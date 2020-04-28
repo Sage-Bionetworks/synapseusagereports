@@ -6,11 +6,11 @@ suppressPackageStartupMessages(library(synapseusagereports))
 
 option_list <- list(
   make_option(c("--project_id"), type = "character",
-              help = "Synapse Project ID.",
+              help = "Synapse Project ID. Should be the same that is in the input file.",
               dest = "project_id",
               metavar = "synapseid"),
   make_option(c("--team_order"), type = "character",
-              help = "comma separated list of teams.",
+              help = "Comma separated list of teams to determine team assignment of downloads.",
               dest = "team_order",
               default = ''),
   make_option(c("--synapse_config"), type = "character",
