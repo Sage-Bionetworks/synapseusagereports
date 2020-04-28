@@ -176,10 +176,14 @@ getData <- function(con, qTemplate, projectId, timestampBreaksDf) {
   res
 }
 
-#' Compose a data frame of start and end for each month.
+#' Compose a data frame of start and end for each month between two dates.
+#' The end date must be in a different (later) month than the start date.
+#' The date ranges returned will be given at the beginning of the months provided.
 #'
 #' @param start_date Starting date as Date object or string coercable to a Date object.
 #' @param start_date Ending date as Date object or string coercable to a Date object.
+#'
+#' @return A data frame with start and end date, the month and year columns for each month range.
 #'
 #' @export
 makeDateBreaks <- function(start_date, end_date) {
@@ -202,10 +206,8 @@ makeDateBreaks <- function(start_date, end_date) {
 
   tibble::tibble(start_date = beginDates) %>%
     dplyr::mutate(end_date = dplyr::lag(start_date),
-                  month=lubridate::month(start_date),
-                  year=lubridate::year(start_date)) %>%
+                  month = lubridate::month(start_date),
+                  year = lubridate::year(start_date)) %>%
     dplyr::filter(!is.na(start_date), !is.na(end_date)) %>%
     dplyr::arrange(start_date)
-
-
 }
