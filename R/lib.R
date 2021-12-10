@@ -70,13 +70,13 @@ report_data_query_all <- function(con, project_id, start_date, end_date) {
 
   queryDataDownload <- report_data_query(con = con,
                                          project_id = project_id,
-                                         query_type = "pageview",
+                                         query_type = "download",
                                          start_date = start_date,
                                          end_date = end_date)
 
   queryDataPageview <- report_data_query(con = con,
                                          project_id = project_id,
-                                         query_type = "download",
+                                         query_type = "pageview",
                                          start_date = start_date,
                                          end_date = end_date)
 
